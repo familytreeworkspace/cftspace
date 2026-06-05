@@ -1,12 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
-import { getLocale } from 'next-intl/server'
 import { redirect } from 'next/navigation'
 import LayoutContent from './_components/LayoutContent'
-import type { Locale } from '@/i18n/request'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
-  const locale = (await getLocale()) as Locale
 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -27,7 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       userName={profile?.name ?? user.email ?? ''}
       userRole={profile?.role}
       pendingCorrections={pendingCorrections ?? 0}
-      locale={locale}
+      locale="en"
     >
       {children}
     </LayoutContent>

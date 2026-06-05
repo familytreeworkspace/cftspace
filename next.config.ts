@@ -1,8 +1,5 @@
 import type { NextConfig } from 'next'
-import createNextIntlPlugin from 'next-intl/plugin'
 import withPWAInit from '@ducanh2912/next-pwa'
-
-const withNextIntl = createNextIntlPlugin('./i18n/request.ts')
 
 const withPWA = withPWAInit({
   dest: 'public',
@@ -16,15 +13,7 @@ const withPWA = withPWAInit({
 })
 
 const nextConfig: NextConfig = {
-  webpack: (config) => {
-    config.resolve.fallback = {
-      ...config.resolve.fallback,
-      fs: false,
-      path: false,
-      crypto: false,
-    }
-    return config
-  },
+  turbopack: {},
 }
 
-export default withNextIntl(withPWA(nextConfig))
+export default withPWA(nextConfig)
