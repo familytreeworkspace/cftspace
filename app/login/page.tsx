@@ -1,14 +1,24 @@
 'use client'
 
 import { useState } from 'react'
-import { useTranslations } from 'next-intl'
 import { login } from '@/app/actions/auth'
 import LanguageToggle from '@/components/LanguageToggle'
 
+const translations = {
+  'auth.platform': 'Community Family Tree Platform',
+  'auth.signInTitle': 'Sign In',
+  'auth.email': 'Email',
+  'auth.password': 'Password',
+  'auth.signIn': 'Sign In',
+  'auth.signingIn': 'Signing In...',
+  'auth.contactAdmin': 'Contact your administrator for access.',
+}
+
 export default function LoginPage() {
-  const t = useTranslations()
   const [error, setError]   = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  const t = (key: string) => translations[key as keyof typeof translations] || key
 
   async function handleSubmit(formData: FormData) {
     setLoading(true)
