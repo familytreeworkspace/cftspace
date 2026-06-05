@@ -49,21 +49,38 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const locale   = await getLocale()
-  const messages = await getMessages()
-  const isRTL    = locale === 'sd'
+  try {
+    const locale   = await getLocale()
+    const messages = await getMessages()
+    const isRTL    = locale === 'sd'
 
-  return (
-    <html
-      lang={locale}
-      dir={isRTL ? 'rtl' : 'ltr'}
-      className={`${inter.variable} ${lora.variable} ${amiri.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
-        <NextIntlClientProvider messages={messages}>
-          {children}
-        </NextIntlClientProvider>
-      </body>
-    </html>
-  )
+    return (
+      <html
+        lang={locale}
+        dir={isRTL ? 'rtl' : 'ltr'}
+        className={`${inter.variable} ${lora.variable} ${amiri.variable} h-full antialiased`}
+      >
+        <body className="min-h-full flex flex-col bg-background text-foreground">
+          <NextIntlClientProvider messages={messages}>
+            {children}
+          </NextIntlClientProvider>
+        </body>
+      </html>
+    )
+  } catch (error) {
+    // Fallback for routes without locale context
+    return (
+      <html
+        lang="en"
+        dir="ltr"
+        className={`${inter.variable} ${lora.variable} ${amiri.variable} h-full antialiased`}
+      >
+        <body className="min-h-full flex flex-col bg-background text-foreground">
+          <NextIntlClientProvider messages={{}}>
+            {children}
+          </NextIntlClientProvider>
+        </body>
+      </html>
+    )
+  }
 }
