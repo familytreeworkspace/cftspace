@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { login } from '@/app/actions/auth'
-import LanguageToggle from '@/components/LanguageToggle'
 
 const translations = {
   'auth.platform': 'Community Family Tree Platform',
@@ -32,11 +31,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-950 via-blue-900 to-blue-800 flex items-center justify-center p-4">
-      {/* Language toggle — top right */}
-      <div className="absolute top-4 right-4">
-        <LanguageToggle />
-      </div>
-
       <div className="w-full max-w-md">
         {/* Branding */}
         <div className="text-center mb-8">
