@@ -161,6 +161,17 @@ export function extractDrawLinks(root: TreeNode): DrawLink[] {
   return links
 }
 
+// Relation code sets (Sindhi + English variants)
+const WIFE_CODES     = new Set(['زال', 'zal', 'wife', 'w', 'spouse'])
+const SON_CODES      = new Set(['ٻت', 'bt', 'beta', 'son', 'بيٽو', 'بيٽا', 'ٻيٽو', 'ٻيٽا'])
+const DAUGHTER_CODES = new Set(['ڏي', 'di', 'beti', 'daughter', 'بيٽي', 'ڏيءَ'])
+const MOTHER_CODES   = new Set(['ماءُ', 'ماء', 'maa', 'mother', 'mom', 'ماءَ'])
+
+function matchCode(member: TreeMember, set: Set<string>): boolean {
+  const code = member.relation_code?.trim() ?? ''
+  return set.has(code) || set.has(code.toLowerCase())
+}
+
 // Build flat member list from household (for within-household tree)
 export function buildHouseholdTree(
   head: TreeMember,
@@ -169,16 +180,56 @@ export function buildHouseholdTree(
 ): TreeNode {
   const allMembers = [head, ...members]
 
-  const built = buildTree(allMembers, links, head.id)
-  if (built) return built
+  // If family_links exist, use them (cross-household / manual links)
+  if (links.length > 0) {
+    const built = buildTree(allMembers, links, head.id)
+    if (built) return built
+  }
 
-  // Fallback: no links yet, just show head with members as children
-  const children: TreeNode[] = members.map(m => ({
-    member: m,
-    spouses: [],
-    children: [],
-    generation: 1,
-  }))
+  // Auto-infer from relation_code — covers all imported data
+  const wives     = members.filter(m => matchCode(m, WIFE_CODES))
+  const sons      = members.filter(m => matchCode(m, SON_CODES))
+  const daughters = members.filter(m => matchCode(m, DAUGHTER_CODES))
+  const mothers   = members.filter(m => matchCode(m, MOTHER_CODES))
+  const others    = members.filter(
+    m => !matchCode(m, WIFE_CODES) && !matchCode(m, SON_CODES) &&
+         !matchCode(m, DAUGHTER_CODES) && !matchCode(m, MOTHER_CODES)
+  )
 
-  return { member: head, spouses: [], children, generation: 0 }
+  // If mother(s) exist → they are one generation above head
+  const baseGen = mothers.length > 0 ? 1 : 0
+
+  const headNode: TreeNode = {
+    member: head,
+    generation: baseGen,
+    spouses: wives.map(w => ({
+      member: w,
+      spouses: [],
+      children: [],
+      generation: baseGen,
+    })),
+    children: [
+      ...[...sons, ...daughters, ...others].map(c => ({
+        member: c,
+        spouses: [],
+        children: [],
+        generation: baseGen + 1,
+      })),
+    ],
+  }
+
+  if (mothers.length > 0) {
+    // Show first mother above head; additional mothers also at generation 0
+    const motherNode: TreeNode = {
+      member: mothers[0],
+      spouses: mothers.slice(1).map(m => ({
+        member: m, spouses: [], children: [], generation: 0,
+      })),
+      children: [headNode],
+      generation: 0,
+    }
+    return motherNode
+  }
+
+  return headNode
 }

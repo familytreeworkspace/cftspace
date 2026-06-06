@@ -80,58 +80,19 @@ export default async function TreePage({
   return (
     <div className="flex flex-col h-full -m-4 sm:-m-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 px-4 py-4 border-b border-border bg-background flex-shrink-0">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
+      <div className="flex items-center gap-4 px-4 py-3 border-b border-border bg-background flex-shrink-0">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-lg font-bold text-foreground truncate">
             Family Tree · {household.head_name}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {(members?.length ?? 0) + 1} generations · {totalMembers} members
+          <p className="text-xs text-muted-foreground">
+            Ghar #{household.ghar_number} · {totalMembers} members
           </p>
-        </div>
-
-        {/* Controls */}
-        <div className="flex items-center gap-3">
-          {/* Mode toggle - Segmented Control */}
-          <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-            <button className="px-3 py-1.5 text-sm font-medium rounded transition-colors text-foreground hover:bg-accent">
-              📊 Graphic
-            </button>
-            <button className="px-3 py-1.5 text-sm font-medium rounded heritage-gradient text-primary-foreground">
-              ◆ Symbols
-            </button>
-          </div>
-
-          {/* Search */}
-          <button className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors" title="Search">
-            🔍
-          </button>
-
-          {/* Fullscreen */}
-          <button className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors" title="Fullscreen">
-            ⛶
-          </button>
         </div>
       </div>
 
-      {/* Tree container with zoom controls */}
-      <div className="flex-1 overflow-hidden relative">
-        {/* Zoom controls - top right */}
-        <div className="absolute top-4 right-4 z-10 flex items-center gap-2 bg-card rounded-lg border border-border p-2 shadow">
-          <span className="text-xs font-medium text-muted-foreground px-2">80%</span>
-          <button className="w-8 h-8 rounded flex items-center justify-center hover:bg-accent transition-colors text-muted-foreground hover:text-foreground" title="Zoom out">
-            −
-          </button>
-          <button className="w-8 h-8 rounded flex items-center justify-center hover:bg-accent transition-colors text-muted-foreground hover:text-foreground" title="Zoom in">
-            +
-          </button>
-          <button className="px-2 py-1 text-xs font-medium rounded border border-border hover:bg-accent transition-colors text-foreground">
-            Reset
-          </button>
-          <span className="text-xs font-medium text-muted-foreground px-2">100%</span>
-        </div>
-
-        {/* Tree */}
+      {/* Tree — full height */}
+      <div className="flex-1 overflow-hidden">
         <FamilyTree
           head={head}
           members={members}

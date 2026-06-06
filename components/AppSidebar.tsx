@@ -8,7 +8,7 @@ import {
   TreePine, ChevronLeft, ChevronRight, Layers, Crown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const NAV_MAIN = [
   { href: '/dashboard',  icon: LayoutDashboard, label: 'Dashboard' },
@@ -18,7 +18,7 @@ const NAV_MAIN = [
   { href: '/reports',    icon: FileBarChart,     label: 'Reports' },
 ]
 
-const NAV_ADMIN = [
+const NAV_ADMIN_CHIEF = [
   { href: '/users',       icon: UserCog,  label: 'Users' },
   { href: '/caste',       icon: Crown,    label: 'Caste' },
   { href: '/subcaste',    icon: Layers,   label: 'Sub Caste' },
@@ -26,9 +26,21 @@ const NAV_ADMIN = [
   { href: '/corrections', icon: Inbox,    label: 'Corrections' },
 ]
 
-export default function AppSidebar() {
+const NAV_ADMIN_ONLY = [
+  { href: '/users',       icon: UserCog,  label: 'Users' },
+  { href: '/subcaste',    icon: Layers,   label: 'Sub Caste' },
+  { href: '/dictionary',  icon: BookOpen, label: 'Dictionary' },
+  { href: '/corrections', icon: Inbox,    label: 'Corrections' },
+]
+
+export default function AppSidebar({ userRole, autoCollapse }: { userRole?: string; autoCollapse?: boolean }) {
   const pathname  = usePathname()
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(autoCollapse ?? false)
+  const NAV_ADMIN = userRole === 'chief' ? NAV_ADMIN_CHIEF : NAV_ADMIN_ONLY
+
+  useEffect(() => {
+    setCollapsed(autoCollapse ?? false)
+  }, [autoCollapse])
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + '/')

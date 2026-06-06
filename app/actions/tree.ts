@@ -148,6 +148,68 @@ export async function unlinkMembers(
   return {}
 }
 
+// Get ALL tree data for every household in a sub caste (3 DB calls total)
+export async function getSubCasteTreeData(subCasteId: string) {
+  const supabase = await createClient()
+
+  const { data: households } = await supabase
+    .from('households')
+    .select('id, ghar_number, head_name, head_gender, dob_year, sub_caste_id, photo_url')
+    .eq('sub_caste_id', subCasteId)
+    .eq('is_active', true)
+    .order('ghar_number')
+
+  if (!households?.length) return []
+
+  const householdIds = households.map(h => h.id)
+
+  const { data: allMembers } = await supabase
+    .from('members')
+    .select('id, name, gender, relation_code, dob_year, photo_url, sub_caste_id, household_id')
+    .in('household_id', householdIds)
+    .order('member_number')
+
+  const allMemberIds = [...householdIds, ...(allMembers ?? []).map(m => m.id)]
+  const { data: allLinks } = await supabase
+    .from('family_links')
+    .select('id, member_id, father_id, mother_id, spouse_id, link_type')
+    .in('member_id', allMemberIds)
+
+  return households.map(h => {
+    const members = (allMembers ?? []).filter(m => m.household_id === h.id)
+    const hMemberIds = new Set([h.id, ...members.map(m => m.id)])
+    const links = (allLinks ?? []).filter(l => hMemberIds.has(l.member_id))
+    return { household: h, members, links }
+  })
+}
+
+// Get full tree data for a single household
+export async function getHouseholdTreeData(householdId: string) {
+  const supabase = await createClient()
+
+  const { data: household } = await supabase
+    .from('households')
+    .select('id, ghar_number, head_name, head_gender, dob_year, sub_caste_id, photo_url')
+    .eq('id', householdId)
+    .single()
+
+  if (!household) return null
+
+  const { data: members } = await supabase
+    .from('members')
+    .select('id, name, gender, relation_code, dob_year, photo_url, sub_caste_id, household_id')
+    .eq('household_id', householdId)
+    .order('member_number')
+
+  const memberIds = [household.id, ...(members ?? []).map(m => m.id)]
+  const { data: links } = await supabase
+    .from('family_links')
+    .select('id, member_id, father_id, mother_id, spouse_id, link_type')
+    .in('member_id', memberIds)
+
+  return { household, members: members ?? [], links: links ?? [] }
+}
+
 // Search members across households for linking
 export async function searchMembersForLink(query: string, excludeId: string) {
   const supabase = await createClient()

@@ -14,8 +14,14 @@ export default async function SubCastePage() {
     redirect('/dashboard')
   }
 
+  // Chief sees all castes; admin only needs their own caste
   const { data: castes } = await supabase
     .from('castes').select('id, name').order('name')
+
+  // Resolve admin's caste name
+  const adminCaste = profile.role === 'admin' && profile.caste_id
+    ? castes?.find(c => c.id === profile.caste_id) ?? null
+    : null
 
   const scQuery = supabase
     .from('sub_castes')
@@ -41,7 +47,13 @@ export default async function SubCastePage() {
         Sub Caste must be created before importing data. Each import file is linked to one sub caste.
       </div>
       <div className="bg-card rounded-xl border border-border p-6">
-        <SubCasteManager castes={castes ?? []} subCastes={subCastesWithCount} />
+        <SubCasteManager
+        castes={castes ?? []}
+        subCastes={subCastesWithCount}
+        userRole={profile.role}
+        adminCasteId={profile.caste_id ?? null}
+        adminCasteName={adminCaste?.name ?? null}
+      />
       </div>
     </div>
   )

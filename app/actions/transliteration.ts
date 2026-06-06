@@ -2,12 +2,14 @@
 
 import { transliterateToSindhi } from '@/lib/transliteration'
 import { createClient } from '@/lib/supabase/server'
-import { getAiCredential } from './settings'
+
+function decryptCredential(encrypted: string): string {
+  return Buffer.from(encrypted, 'base64').toString('utf-8')
+}
 
 export async function getTransliteration(
   englishName: string,
   context?: string,
-  provider: string = 'anthropic'
 ): Promise<{
   sindhi: string
   hindi: string
@@ -19,41 +21,42 @@ export async function getTransliteration(
   }
 
   try {
-    // Get the user's AI credential for the specified provider
-    const { authType, credential, error: credError } = await getAiCredential(provider)
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { sindhi: '', hindi: '', confidence: 0, error: 'Not authenticated' }
 
-    if (credError || !credential) {
+    // Auto-detect: find first active api_key credential
+    const { data: credentials } = await supabase
+      .from('ai_credentials')
+      .select('provider, auth_type, credential_encrypted')
+      .eq('user_id', user.id)
+      .eq('is_active', true) as any
+
+    if (!credentials || credentials.length === 0) {
       return {
-        sindhi: '',
-        hindi: '',
-        confidence: 0,
-        error: `${provider} credential not configured. Please add it in Settings → AI Service Credentials.`,
+        sindhi: '', hindi: '', confidence: 0,
+        error: 'No AI credentials found. Go to Settings and add an API Key.',
       }
     }
 
-    // For Anthropic, we expect API key auth type
-    if (provider === 'anthropic' && authType !== 'api_key') {
+    // Find a credential with api_key auth type
+    const apiKeyCred = credentials.find((c: any) => c.auth_type === 'api_key')
+    if (!apiKeyCred) {
       return {
-        sindhi: '',
-        hindi: '',
-        confidence: 0,
-        error: `Anthropic requires API Key authentication, but ${authType} is configured.`,
+        sindhi: '', hindi: '', confidence: 0,
+        error: 'AI suggest requires an API Key. Your saved credential uses "' +
+          credentials[0].auth_type + '" — please update it in Settings with auth type "API Key".',
       }
     }
 
-    const result = await transliterateToSindhi(
-      englishName,
-      context,
-      credential,
-      provider,
-      authType
-    )
+    const credential = decryptCredential(apiKeyCred.credential_encrypted)
+    const provider = apiKeyCred.provider as string
+
+    const result = await transliterateToSindhi(englishName, context, credential, provider, 'api_key')
     return result
   } catch (err: any) {
     return {
-      sindhi: '',
-      hindi: '',
-      confidence: 0,
+      sindhi: '', hindi: '', confidence: 0,
       error: err.message || 'Transliteration failed',
     }
   }

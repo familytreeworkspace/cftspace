@@ -20,28 +20,39 @@ export default function SettingsClient({
 }) {
   const [credentialInput, setCredentialInput] = useState('')
   const [providerInput, setProviderInput] = useState('anthropic')
-  const [authTypeInput, setAuthTypeInput] = useState('api_key')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  const authTypes = [
-    { id: 'api_key', label: 'API Key', placeholder: 'sk_... or api_key_...' },
-    { id: 'user_id', label: 'User ID', placeholder: 'user_12345 or username' },
-    { id: 'email', label: 'Email', placeholder: 'admin@company.com' },
-    { id: 'token', label: 'Access Token', placeholder: 'token_xxxxx...' },
-    { id: 'custom', label: 'Custom Credential', placeholder: 'Enter your credential' },
+  const AI_PROVIDERS = [
+    {
+      id: 'anthropic',
+      label: 'Anthropic (Claude)',
+      placeholder: 'sk-ant-api03-...',
+      note: '$5 free credits on new account — console.anthropic.com',
+      badge: 'Recommended',
+    },
+    {
+      id: 'openai',
+      label: 'OpenAI (GPT)',
+      placeholder: 'sk-proj-...',
+      note: 'Requires billing — platform.openai.com',
+      badge: 'Paid',
+    },
+    {
+      id: 'gemini',
+      label: 'Google Gemini',
+      placeholder: 'AIza...',
+      note: 'Free tier available — aistudio.google.com',
+      badge: 'Free',
+    },
   ]
 
-  const currentAuthType = authTypes.find(a => a.id === authTypeInput)
+  const currentProvider = AI_PROVIDERS.find(p => p.id === providerInput) ?? AI_PROVIDERS[0]
 
   async function handleSaveCredential() {
     if (!providerInput.trim()) {
       setError('Provider name cannot be empty')
-      return
-    }
-    if (!authTypeInput.trim()) {
-      setError('Authentication type is required')
       return
     }
     if (!credentialInput.trim()) {
@@ -53,20 +64,13 @@ export default function SettingsClient({
     setSuccess(null)
 
     startTransition(async () => {
-      const result = await saveAiCredential(
-        providerInput.trim(),
-        authTypeInput,
-        credentialInput
-      )
+      const result = await saveAiCredential(providerInput, 'api_key', credentialInput)
       if (result.error) {
         setError(result.error)
       } else {
-        setSuccess(
-          `${providerInput} (${currentAuthType?.label}) saved successfully`
-        )
+        setSuccess(`${currentProvider.label} API Key saved successfully`)
         setCredentialInput('')
         setProviderInput('anthropic')
-        setAuthTypeInput('api_key')
       }
     })
   }
@@ -113,64 +117,59 @@ export default function SettingsClient({
           🤖 AI Service Credentials
         </h2>
         <p className="text-sm text-muted-foreground mb-4">
-          Add credentials for any AI service. Support API Keys, User IDs, Emails, Tokens, or custom credentials.
+          Add an API Key for any AI provider. Used for Sindhi/Hindi transliteration suggestions.
         </p>
 
         {/* Add New Credential */}
         <div className="bg-muted/30 border border-border rounded-lg p-4 mb-6">
-          <h3 className="font-medium text-foreground mb-4">
-            Add New AI Service Credential
-          </h3>
+          <h3 className="font-medium text-foreground mb-4">Add AI Provider API Key</h3>
 
           <div className="space-y-3">
-            {/* Provider Name */}
+            {/* Provider Dropdown */}
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                AI Provider Name <span className="text-destructive">*</span>
+                AI Provider <span className="text-destructive">*</span>
               </label>
-              <input
-                type="text"
-                value={providerInput}
-                onChange={e => setProviderInput(e.target.value)}
-                placeholder="e.g. anthropic, openai, gemini, custom-service"
-                className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Examples: anthropic, openai, gemini, huggingface, etc.
-              </p>
-            </div>
-
-            {/* Authentication Type */}
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                Authentication Type <span className="text-destructive">*</span>
-              </label>
-              <select
-                value={authTypeInput}
-                onChange={e => setAuthTypeInput(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                {authTypes.map(auth => (
-                  <option key={auth.id} value={auth.id}>
-                    {auth.label}
-                  </option>
+              <div className="grid grid-cols-3 gap-2">
+                {AI_PROVIDERS.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => { setProviderInput(p.id); setCredentialInput('') }}
+                    className={`flex flex-col items-start p-3 rounded-lg border text-left transition-all ${
+                      providerInput === p.id
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border bg-background hover:border-primary/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 w-full mb-1">
+                      <span className="text-sm font-semibold text-foreground truncate">
+                        {p.id === 'anthropic' ? '🟠' : p.id === 'openai' ? '🟢' : '🔵'} {p.label.split(' ')[0]}
+                      </span>
+                      <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                        p.badge === 'Free' ? 'bg-success/15 text-success' :
+                        p.badge === 'Recommended' ? 'bg-primary/15 text-primary' :
+                        'bg-muted text-muted-foreground'
+                      }`}>
+                        {p.badge}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground leading-tight">{p.note}</p>
+                  </button>
                 ))}
-              </select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Choose how you authenticate with {providerInput || 'this service'}
-              </p>
+              </div>
             </div>
 
-            {/* Credential Value */}
+            {/* API Key Input */}
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                {currentAuthType?.label} <span className="text-destructive">*</span>
+                {currentProvider.label} — API Key <span className="text-destructive">*</span>
               </label>
               <input
                 type="password"
                 value={credentialInput}
                 onChange={e => setCredentialInput(e.target.value)}
-                placeholder={currentAuthType?.placeholder}
+                placeholder={currentProvider.placeholder}
                 className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
               <p className="text-xs text-muted-foreground mt-1">
@@ -210,28 +209,25 @@ export default function SettingsClient({
             </h3>
             <div className="space-y-2">
               {existingCredentials.map(cred => {
-                const authLabel =
-                  authTypes.find(a => a.id === cred.auth_type)?.label ||
-                  cred.auth_type
                 return (
                   <div
                     key={cred.id}
                     className="flex items-center justify-between p-3 bg-muted/30 border border-border rounded-lg"
                   >
                     <div className="flex-1">
-                      <div className="font-medium text-foreground text-sm capitalize">
-                        {cred.provider}
-                        <span className="ml-2 text-xs bg-primary/15 text-primary px-2 py-0.5 rounded">
-                          {authLabel}
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-foreground text-sm capitalize">
+                          {cred.provider === 'anthropic' ? '🟠' : cred.provider === 'openai' ? '🟢' : cred.provider === 'gemini' ? '🔵' : '🤖'}
+                          {' '}{AI_PROVIDERS.find(p => p.id === cred.provider)?.label ?? cred.provider}
                         </span>
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        Added {new Date(cred.created_at).toLocaleDateString()}
                         {cred.is_active && (
-                          <span className="ml-2 inline-block px-2 py-0.5 bg-success/15 text-success rounded text-xs font-medium">
+                          <span className="px-2 py-0.5 bg-success/15 text-success rounded text-xs font-medium">
                             Active
                           </span>
                         )}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        API Key · Added {new Date(cred.created_at).toLocaleDateString()}
                       </div>
                     </div>
                     <button

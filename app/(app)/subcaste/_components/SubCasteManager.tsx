@@ -10,9 +10,15 @@ interface SubCaste { id: string; name: string; name_sindhi: string | null; name_
 export default function SubCasteManager({
   castes,
   subCastes,
+  userRole,
+  adminCasteId,
+  adminCasteName,
 }: {
   castes: Caste[]
   subCastes: SubCaste[]
+  userRole: string
+  adminCasteId: string | null
+  adminCasteName: string | null
 }) {
   const [showForm, setShowForm]     = useState(false)
   const [editItem, setEditItem]     = useState<SubCaste | null>(null)
@@ -22,11 +28,12 @@ export default function SubCasteManager({
   const [isTranslating, startTranslating] = useTransition()
   const [filterCaste, setFilterCaste] = useState('')
 
-  // Transliteration state
-  const [nameValue, setNameValue] = useState(editItem?.name || '')
-  const [sindhiName, setSindhiName] = useState(editItem?.name_sindhi || '')
-  const [hindiName, setHindiName] = useState(editItem?.name_hindi || '')
-  const [confidence, setConfidence] = useState(0)
+  // Form field state
+  const [nameValue, setNameValue]     = useState('')
+  const [sindhiName, setSindhiName]   = useState('')
+  const [hindiName, setHindiName]     = useState('')
+  const [casteIdValue, setCasteIdValue] = useState('')
+  const [confidence, setConfidence]   = useState(0)
 
   const casteMap = new Map(castes.map(c => [c.id, c.name]))
   const filtered = filterCaste
@@ -52,13 +59,11 @@ export default function SubCasteManager({
     })
   }
 
-  async function handleSubmit(formData: FormData) {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
     setError(null)
     start(async () => {
-      // Add transliterated values
-      if (sindhiName) formData.append('name_sindhi', sindhiName)
-      if (hindiName) formData.append('name_hindi', hindiName)
-
       const result = editItem
         ? await updateSubCaste(editItem.id, formData)
         : await createSubCaste(formData)
@@ -71,6 +76,7 @@ export default function SubCasteManager({
         setNameValue('')
         setSindhiName('')
         setHindiName('')
+        setCasteIdValue('')
         setConfidence(0)
       }
     })
@@ -109,6 +115,7 @@ export default function SubCasteManager({
             setNameValue('')
             setSindhiName('')
             setHindiName('')
+            setCasteIdValue(adminCasteId ?? '')
             setConfidence(0)
             setError(null)
           }}
@@ -130,8 +137,9 @@ export default function SubCasteManager({
           <h3 className="font-semibold text-foreground mb-4">
             {editItem ? '✏️ Edit Sub Caste' : '➕ Add New Sub Caste'}
           </h3>
-          <form action={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Caste — fixed for admin, dropdown for chief */}
+            {userRole === 'chief' ? (
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">
                   Caste <span className="text-destructive">*</span>
@@ -139,14 +147,23 @@ export default function SubCasteManager({
                 <select
                   name="caste_id"
                   required
-                  defaultValue={editItem?.caste_id ?? ''}
+                  value={casteIdValue}
+                  onChange={e => setCasteIdValue(e.target.value)}
                   className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="">— Select Caste —</option>
                   {castes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
-            </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">Caste</label>
+                <div className="px-3 py-2 text-sm rounded-lg border border-border bg-muted text-foreground">
+                  {adminCasteName ?? '—'}
+                </div>
+                <input type="hidden" name="caste_id" value={adminCasteId ?? ''} />
+              </div>
+            )}
 
             {/* English Name + AI Button */}
             <div>
@@ -172,6 +189,11 @@ export default function SubCasteManager({
                   🤖 {isTranslating ? 'Getting...' : 'Suggest'}
                 </button>
               </div>
+              {error && (
+                <p className="mt-2 text-xs text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+                  {error}
+                </p>
+              )}
             </div>
 
             {/* Sindhi Name */}
@@ -181,6 +203,7 @@ export default function SubCasteManager({
               </label>
               <input
                 type="text"
+                name="name_sindhi"
                 value={sindhiName}
                 onChange={e => setSindhiName(e.target.value)}
                 dir="rtl"
@@ -196,6 +219,7 @@ export default function SubCasteManager({
               </label>
               <input
                 type="text"
+                name="name_hindi"
                 value={hindiName}
                 onChange={e => setHindiName(e.target.value)}
                 placeholder="हिंदी नाम"
@@ -219,6 +243,7 @@ export default function SubCasteManager({
                   setNameValue('')
                   setSindhiName('')
                   setHindiName('')
+                  setCasteIdValue('')
                   setConfidence(0)
                 }}
                 className="px-4 py-2 text-sm text-foreground border border-border rounded-lg hover:bg-accent"
@@ -241,8 +266,8 @@ export default function SubCasteManager({
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Name</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Sindhi</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 hidden sm:table-cell">Hindi</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500">Sindhi</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 hidden sm:table-cell">Hindi</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500">Caste</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 w-24">Households</th>
                 <th className="w-24" />
@@ -252,8 +277,8 @@ export default function SubCasteManager({
               {filtered.map((sc, i) => (
                 <tr key={sc.id} className={`border-t border-gray-100 ${i % 2 !== 0 ? 'bg-gray-50/50' : ''}`}>
                   <td className="px-4 py-3 font-medium text-gray-800">{sc.name}</td>
-                  <td className="px-4 py-3 text-gray-500" dir="rtl">{sc.name_sindhi || '—'}</td>
-                  <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">{sc.name_hindi || '—'}</td>
+                  <td className="px-4 py-3 text-gray-500 text-center" dir="rtl">{sc.name_sindhi || '—'}</td>
+                  <td className="px-4 py-3 text-gray-500 text-center hidden sm:table-cell">{sc.name_hindi || '—'}</td>
                   <td className="px-4 py-3">
                     <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
                       {casteMap.get(sc.caste_id ?? '') ?? '—'}
@@ -271,6 +296,7 @@ export default function SubCasteManager({
                           setNameValue(sc.name)
                           setSindhiName(sc.name_sindhi || '')
                           setHindiName(sc.name_hindi || '')
+                          setCasteIdValue(sc.caste_id ?? adminCasteId ?? '')
                           setConfidence(0)
                           setError(null)
                         }}

@@ -11,14 +11,21 @@ export interface FieldDef {
 }
 
 export const HOUSEHOLD_FIELDS: FieldDef[] = [
-  { key: 'ghar_number',      label: 'Ghar Number',       sindhi: 'گهر نمبر',        required: true  },
-  { key: 'head_name',        label: 'Head Name',         sindhi: 'نالو',             required: true  },
-  { key: 'head_gender',      label: 'Gender',            sindhi: 'صنف',              required: false },
-  { key: 'dob_year',         label: 'Birth Year',        sindhi: 'جنم جي تاريخ',    required: false },
-  { key: 'education',        label: 'Education',         sindhi: 'تعليم',            required: false },
-  { key: 'profession',       label: 'Profession',        sindhi: 'ڪاروبار',          required: false },
-  { key: 'original_address', label: 'Original Address',  sindhi: 'اصل پتو',         required: false },
-  { key: 'current_address',  label: 'Current Address',   sindhi: 'موجوده پتو',       required: false },
+  { key: 'ghar_number',      label: 'Ghar Number',         sindhi: 'گهر نمبر',        required: true  },
+  { key: 'head_name',        label: 'Head Name',           sindhi: 'نالو',             required: true  },
+  { key: 'head_gender',      label: 'Gender',              sindhi: 'صنف',              required: false },
+  { key: 'head_father_name', label: 'Father Name',         required: false },
+  { key: 'dob_year',         label: 'Birth Year',          sindhi: 'جنم جي تاريخ',    required: false },
+  { key: 'education',        label: 'Education',           sindhi: 'تعليم',            required: false },
+  { key: 'profession',       label: 'Profession',          sindhi: 'ڪاروبار',          required: false },
+  { key: 'original_address', label: 'Original Address',    sindhi: 'اصل پتو',         required: false },
+  { key: 'orig_taluka',      label: 'Original Taluka',     sindhi: 'اصل تعلقو',    required: false },
+  { key: 'orig_district',    label: 'Original District',   sindhi: 'اصل ضلعو',     required: false },
+  { key: 'orig_country',     label: 'Original Country',    sindhi: 'اصل ملڪ',      required: false },
+  { key: 'current_address',  label: 'Current Address',     sindhi: 'موجوده پتو',   required: false },
+  { key: 'curr_taluka',      label: 'Current Taluka',      sindhi: 'موجوده تعلقو', required: false },
+  { key: 'curr_district',    label: 'Current District',    sindhi: 'موجوده ضلعو',  required: false },
+  { key: 'curr_country',     label: 'Current Country',     sindhi: 'موجوده ملڪ',   required: false },
 ]
 
 export const RELATED_FIELDS: FieldDef[] = [
@@ -66,8 +73,16 @@ const HEADER_ALIASES: Record<string, string> = {
   'تعليم': 'education', 'education': 'education',
   'ڪاروبار': 'profession', 'profession': 'profession', 'business': 'profession',
   'اصل پتو': 'original_address', 'original address': 'original_address', 'original_address': 'original_address',
+  'orig_taluka': 'orig_taluka', 'original taluka': 'orig_taluka', 'orig taluka': 'orig_taluka', 'اصل تعلقو': 'orig_taluka',
+  'orig_district': 'orig_district', 'original district': 'orig_district', 'orig district': 'orig_district', 'اصل ضلعو': 'orig_district',
+  'orig_country': 'orig_country', 'original country': 'orig_country', 'orig country': 'orig_country', 'اصل ملڪ': 'orig_country',
   'موجوده پتو': 'current_address', 'current address': 'current_address', 'current_address': 'current_address',
-  'صنف': 'head_gender', 'gender': 'head_gender',
+  'curr_taluka': 'curr_taluka', 'current taluka': 'curr_taluka', 'curr taluka': 'curr_taluka', 'موجوده تعلقو': 'curr_taluka',
+  'curr_district': 'curr_district', 'current district': 'curr_district', 'curr district': 'curr_district', 'موجوده ضلعو': 'curr_district',
+  'curr_country': 'curr_country', 'current country': 'curr_country', 'curr country': 'curr_country', 'موجوده ملڪ': 'curr_country',
+  'صنف': 'head_gender', 'gender': 'head_gender', 'head_gender': 'head_gender',
+  'head_father_name': 'head_father_name', 'father name': 'head_father_name', 'father_name': 'head_father_name',
+  'والد': 'head_father_name', 'ولد': 'head_father_name', 'والد جو نالو': 'head_father_name', 'پيءُ': 'head_father_name', 'پيءَ جو نالو': 'head_father_name',
   // Related
   'ڀاتي نمبر': 'member_number', 'member number': 'member_number', 'member_number': 'member_number',
   'پاتي جو نالو': 'name', 'member name': 'name',

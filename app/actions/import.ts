@@ -7,12 +7,19 @@ import type { ImportType } from '@/lib/import-column-maps'
 export interface HouseholdRow {
   ghar_number: string
   head_name: string
+  head_father_name?: string
   head_gender?: string
   dob_year?: number | null
   education?: string
   profession?: string
   original_address?: string
+  orig_taluka?: string
+  orig_district?: string
+  orig_country?: string
   current_address?: string
+  curr_taluka?: string
+  curr_district?: string
+  curr_country?: string
 }
 
 export interface MemberRow {
@@ -85,13 +92,20 @@ export async function importHouseholds(
       sub_caste_id:     subCasteId,
       ghar_number:      String(row.ghar_number).trim(),
       head_name:        String(row.head_name).trim(),
+      head_father_name: row.head_father_name?.trim() || null,
       head_gender:      parseGender(row.head_gender),
       dob_year:         parseYear(row.dob_year),
       education:        row.education?.trim() || null,
       profession:       row.profession?.trim() || null,
       original_address: row.original_address?.trim() || null,
+      orig_taluka:      row.orig_taluka?.trim() || null,
+      orig_district:    row.orig_district?.trim() || null,
+      orig_country:     row.orig_country?.trim() || null,
       current_address:  row.current_address?.trim() || null,
-    }, { onConflict: 'sub_caste_id,ghar_number' })
+      curr_taluka:      row.curr_taluka?.trim() || null,
+      curr_district:    row.curr_district?.trim() || null,
+      curr_country:     row.curr_country?.trim() || null,
+    } as any, { onConflict: 'sub_caste_id,ghar_number' })
 
     if (error) {
       result.errors.push(`Ghar ${row.ghar_number}: ${error.message}`)
