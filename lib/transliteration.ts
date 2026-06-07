@@ -1,4 +1,106 @@
-// Shared API call — all providers return { sindhi, english, hindi, confidence }
+// Shared API call — sends prompt, returns raw response text
+async function callAIRaw(
+  prompt: string,
+  credential: string,
+  provider: string,
+  maxTokens: number,
+): Promise<string> {
+  const key = credential || process.env.ANTHROPIC_API_KEY
+  if (!key) throw new Error(`${provider} credential not configured.`)
+
+  const p = provider.toLowerCase()
+
+  if (p.includes('openai') || p.includes('gpt')) {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'gpt-4o-mini', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+    })
+    if (!res.ok) { const e = await res.json().catch(() => ({})) as any; throw new Error(`OpenAI ${res.status}: ${e?.error?.message || res.statusText}`) }
+    return ((await res.json()) as any).choices?.[0]?.message?.content || ''
+
+  } else if (p.includes('gemini')) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    })
+    if (!res.ok) { const e = await res.json().catch(() => ({})) as any; throw new Error(`Gemini ${res.status}: ${e?.error?.message || res.statusText}`) }
+    return ((await res.json()) as any).candidates?.[0]?.content?.parts?.[0]?.text || ''
+
+  } else {
+    // Anthropic (default)
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
+    })
+    if (!res.ok) { const e = await res.json().catch(() => ({})) as any; throw new Error(`Anthropic ${res.status}: ${e?.error?.message || res.statusText}`) }
+    return ((await res.json()) as any).content?.[0]?.text || ''
+  }
+}
+
+// ── Minimal batch transliteration for Directory ───────────────────────────────
+// All N words → ONE API call. Minimal prompt. Compact JSON response.
+// Tokens used: ~50 prompt overhead + ~15 per word (vs 150 prompt + 30 output per word per call)
+export async function transliterateDirectoryBatch(
+  words: string[],
+  sourceLang: 'sindhi' | 'english' | 'hindi',
+  credential: string,
+  provider: string = 'anthropic',
+): Promise<{ word: string; english: string; hindi: string; sindhi: string }[]> {
+  if (!words.length) return []
+
+  const langName = sourceLang === 'sindhi' ? 'Sindhi' : sourceLang === 'hindi' ? 'Hindi' : 'English'
+
+  // Ultra-compact prompt — only what AI needs
+  const prompt = `Transliterate each ${langName} name. Return ONLY a JSON array, no other text.
+Input: ${JSON.stringify(words)}
+Output: [{"e":"English","h":"Hindi","s":"Sindhi"}, ...]`
+
+  // max_tokens: ~20 tokens per word is generous for names
+  const maxTokens = Math.max(150, words.length * 20)
+
+  const raw = await callAIRaw(prompt, credential, provider, maxTokens)
+
+  // Parse array response
+  const arrMatch = raw.match(/\[[\s\S]*\]/)
+  if (!arrMatch) throw new Error('Could not parse batch AI response')
+  const parsed: { e?: string; h?: string; s?: string }[] = JSON.parse(arrMatch[0])
+
+  return words.map((word, i) => ({
+    word,
+    english: parsed[i]?.e || '',
+    hindi:   parsed[i]?.h || '',
+    sindhi:  parsed[i]?.s || (sourceLang === 'sindhi' ? word : ''),
+  }))
+}
+
+// ── Minimal single-entry transliteration ─────────────────────────────────────
+export async function transliterateSingleMinimal(
+  word: string,
+  sourceLang: 'sindhi' | 'english' | 'hindi',
+  credential: string,
+  provider: string = 'anthropic',
+): Promise<{ english: string; hindi: string; sindhi: string }> {
+  const langName = sourceLang === 'sindhi' ? 'Sindhi' : sourceLang === 'hindi' ? 'Hindi' : 'English'
+  const prompt = `Transliterate this ${langName} name. Return ONLY JSON, no other text.
+"${word}"
+{"e":"English","h":"Hindi","s":"Sindhi"}`
+
+  const raw = await callAIRaw(prompt, credential, provider, 40)
+  const m = raw.match(/\{[^}]+\}/)
+  if (!m) throw new Error('Could not parse AI response')
+  const r = JSON.parse(m[0])
+  return {
+    english: r.e || '',
+    hindi:   r.h || '',
+    sindhi:  r.s || (sourceLang === 'sindhi' ? word : ''),
+  }
+}
+
+// Shared legacy wrapper (used by transliterateUniversal and transliterateToSindhi)
 async function callAI(
   prompt: string,
   credential?: string,
@@ -10,67 +112,9 @@ async function callAI(
       `${provider} credential not configured. Add it in Settings → AI Service Credentials.`
     )
   }
+  const raw = await callAIRaw(prompt, key, provider, 250)
 
-  const p = provider.toLowerCase()
-  let responseText = ''
-
-  if (p.includes('openai') || p.includes('gpt')) {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        max_tokens: 250,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    })
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({})) as any
-      throw new Error(`OpenAI API error ${response.status}: ${err?.error?.message || response.statusText}`)
-    }
-    const data: any = await response.json()
-    responseText = data.choices?.[0]?.message?.content || ''
-
-  } else if (p.includes('gemini')) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-      }),
-    })
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({})) as any
-      throw new Error(`Gemini API error ${response.status}: ${err?.error?.message || response.statusText}`)
-    }
-    const data: any = await response.json()
-    responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-
-  } else {
-    // Anthropic (default)
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 250,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    })
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({})) as any
-      throw new Error(`Anthropic API error ${response.status}: ${err?.error?.message || response.statusText}`)
-    }
-    const data: any = await response.json()
-    responseText = data.content?.[0]?.text || ''
-  }
-
-  const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+  const jsonMatch = raw.match(/\{[\s\S]*\}/)
   if (!jsonMatch) throw new Error('Could not parse AI response')
   const result = JSON.parse(jsonMatch[0])
 

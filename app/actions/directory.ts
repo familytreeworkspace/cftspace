@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { transliterateUniversal } from '@/lib/transliteration'
+import { transliterateDirectoryBatch, transliterateSingleMinimal } from '@/lib/transliteration'
 
 export interface DirectoryEntry {
   id: string
@@ -142,28 +142,33 @@ export async function deleteDirectoryEntry(id: string): Promise<{ error?: string
 
 // ── Bulk AI Convert ──────────────────────────────────────────────────────────
 
+async function getAICredential(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const { data: credentials } = await (supabase
+    .from('ai_credentials' as any)
+    .select('provider, auth_type, credential_encrypted')
+    .eq('user_id', userId)
+    .eq('is_active', true)) as any
+
+  const apiKeyCred = credentials?.find((c: any) => c.auth_type === 'api_key')
+  if (!apiKeyCred) return null
+  return {
+    credential: decryptCredential(apiKeyCred.credential_encrypted),
+    provider: apiKeyCred.provider as string,
+  }
+}
+
 export async function bulkAIConvert(limit: number = 20): Promise<{
   converted: number
   errors: string[]
+  updatedEntries: { id: string; english_word: string | null; hindi_word: string | null }[]
 }> {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { converted: 0, errors: ['Not authenticated'] }
+    if (!user) return { converted: 0, errors: ['Not authenticated'], updatedEntries: [] }
 
-    const { data: credentials } = await (supabase
-      .from('ai_credentials' as any)
-      .select('provider, auth_type, credential_encrypted')
-      .eq('user_id', user.id)
-      .eq('is_active', true)) as any
-
-    const apiKeyCred = credentials?.find((c: any) => c.auth_type === 'api_key')
-    if (!apiKeyCred) {
-      return { converted: 0, errors: ['No AI API key found. Add one in Settings.'] }
-    }
-
-    const credential = decryptCredential(apiKeyCred.credential_encrypted)
-    const provider   = apiKeyCred.provider as string
+    const ai = await getAICredential(supabase, user.id)
+    if (!ai) return { converted: 0, errors: ['No AI API key found. Add one in Settings.'], updatedEntries: [] }
 
     const { data: entries, error: fetchErr } = await (supabase
       .from('directory')
@@ -171,22 +176,32 @@ export async function bulkAIConvert(limit: number = 20): Promise<{
       .or('english_word.is.null,hindi_word.is.null')
       .limit(limit)) as any
 
-    if (fetchErr) return { converted: 0, errors: [fetchErr.message] }
-    if (!entries?.length) return { converted: 0, errors: [] }
+    if (fetchErr) return { converted: 0, errors: [fetchErr.message], updatedEntries: [] }
+    if (!entries?.length) return { converted: 0, errors: [], updatedEntries: [] }
 
+    const entryList = entries as any[]
+    const words = entryList.map((e: any) => e.sindhi_word as string)
+    // Detect dominant script from first word (all entries in a batch are same script)
+    const sourceLang = isSindhiScript(words[0]) ? 'sindhi' : 'english'
+
+    // ONE API call for all N words — minimal prompt, compact response
+    let batchResults: { word: string; english: string; hindi: string; sindhi: string }[]
     const errors: string[] = []
+    try {
+      batchResults = await transliterateDirectoryBatch(words, sourceLang, ai.credential, ai.provider)
+    } catch (err: any) {
+      return { converted: 0, errors: [err.message], updatedEntries: [] }
+    }
+
     let converted = 0
+    const updatedEntries: { id: string; english_word: string | null; hindi_word: string | null }[] = []
 
-    for (const entry of entries as any[]) {
+    for (let i = 0; i < entryList.length; i++) {
+      const entry  = entryList[i]
+      const result = batchResults[i]
+      if (!result) continue
+
       try {
-        const sourceLang = isSindhiScript(entry.sindhi_word) ? 'sindhi' : 'english'
-        const result = await transliterateUniversal(
-          entry.sindhi_word,
-          sourceLang,
-          credential,
-          provider,
-        )
-
         const upd: Partial<{ english_word: string | null; hindi_word: string | null; updated_at: string }> = {
           updated_at: new Date().toISOString(),
         }
@@ -196,6 +211,11 @@ export async function bulkAIConvert(limit: number = 20): Promise<{
         if (Object.keys(upd).length > 1) {
           await supabase.from('directory').update(upd).eq('id', entry.id)
           converted++
+          updatedEntries.push({
+            id: entry.id,
+            english_word: upd.english_word ?? entry.english_word,
+            hindi_word:   upd.hindi_word   ?? entry.hindi_word,
+          })
         }
       } catch (err: any) {
         errors.push(`"${entry.sindhi_word}": ${err.message}`)
@@ -203,9 +223,53 @@ export async function bulkAIConvert(limit: number = 20): Promise<{
     }
 
     revalidatePath('/directory')
-    return { converted, errors }
+    return { converted, errors, updatedEntries }
   } catch (err: any) {
-    return { converted: 0, errors: [err.message] }
+    return { converted: 0, errors: [err.message], updatedEntries: [] }
+  }
+}
+
+// Convert a single directory entry via AI
+export async function convertSingleEntry(id: string): Promise<{
+  english_word: string | null
+  hindi_word: string | null
+  error?: string
+}> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { english_word: null, hindi_word: null, error: 'Not authenticated' }
+
+    const ai = await getAICredential(supabase, user.id)
+    if (!ai) return { english_word: null, hindi_word: null, error: 'No AI API key found. Add one in Settings.' }
+
+    const { data: entry } = await supabase
+      .from('directory')
+      .select('sindhi_word, english_word, hindi_word')
+      .eq('id', id)
+      .single()
+
+    if (!entry) return { english_word: null, hindi_word: null, error: 'Entry not found' }
+
+    const sourceLang = isSindhiScript(entry.sindhi_word) ? 'sindhi' : 'english'
+    // Minimal single-entry call — small prompt, max_tokens=40
+    const result = await transliterateSingleMinimal(entry.sindhi_word, sourceLang, ai.credential, ai.provider)
+
+    const upd: Partial<{ english_word: string | null; hindi_word: string | null; updated_at: string }> = {
+      updated_at: new Date().toISOString(),
+    }
+    if (result.english) upd.english_word = result.english
+    if (result.hindi)   upd.hindi_word   = result.hindi
+
+    await supabase.from('directory').update(upd).eq('id', id)
+    revalidatePath('/directory')
+
+    return {
+      english_word: upd.english_word ?? null,
+      hindi_word:   upd.hindi_word   ?? null,
+    }
+  } catch (err: any) {
+    return { english_word: null, hindi_word: null, error: err.message }
   }
 }
 
