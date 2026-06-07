@@ -148,28 +148,113 @@ export async function unlinkMembers(
   return {}
 }
 
+// Sindhi/English codes that identify an in-household ancestor member
+const ANCESTOR_FATHER = ['father', 'dad', 'abu', 'aabu', 'پيءُ', 'پيءَ', 'باپ', 'پيو']
+const ANCESTOR_MOTHER = ['ماءُ', 'ماء', 'maa', 'mother', 'mom', 'ماءَ']
+
+// One-time cleanup: convert legacy in-household father/mother MEMBERS into proper
+// virtual ancestor HOUSEHOLDS (so they can act as a real parent for sibling linking).
+// Idempotent — after the first run there are no such members left, so it no-ops.
+async function migrateInHouseholdAncestors(subCasteId: string): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  const { data: profile } = await supabase
+    .from('users').select('role').eq('id', user.id).single()
+  if (!profile || !['chief', 'admin'].includes(profile.role)) return
+
+  const { data: hhs } = await supabase
+    .from('households').select('id').eq('sub_caste_id', subCasteId).eq('is_active', true)
+  if (!hhs?.length) return
+  const hhIds = hhs.map((h: any) => h.id as string)
+
+  const { data: members } = await supabase
+    .from('members')
+    .select('id, name, gender, relation_code, dob_year, household_id, sub_caste_id')
+    .in('household_id', hhIds)
+
+  const isCode = (code: string, set: string[]) =>
+    set.includes(code) || set.includes((code ?? '').toLowerCase())
+
+  const ancestors = (members ?? []).filter(
+    m => isCode(m.relation_code ?? '', ANCESTOR_FATHER) || isCode(m.relation_code ?? '', ANCESTOR_MOTHER)
+  )
+  if (!ancestors.length) return
+
+  let i = 0
+  for (const m of ancestors) {
+    const isMother = isCode(m.relation_code ?? '', ANCESTOR_MOTHER)
+    const { data: vh, error: vhErr } = await (supabase as any)
+      .from('households')
+      .insert({
+        sub_caste_id: m.sub_caste_id ?? subCasteId,
+        ghar_number:  `ANC-${Date.now()}-${i++}`,
+        head_name:    m.name,
+        head_gender:  m.gender,
+        dob_year:     m.dob_year,
+        is_virtual:   true,
+        is_active:    true,
+      })
+      .select('id')
+      .single()
+    if (vhErr || !vh) continue
+
+    const { error: linkErr } = await (supabase as any)
+      .from('household_links')
+      .insert({
+        child_household_id:  m.household_id,
+        parent_household_id: vh.id,
+        relation:            isMother ? 'mother' : 'father',
+        link_type:           'biological',
+        created_by:          user.id,
+      })
+    if (linkErr) { await supabase.from('households').delete().eq('id', vh.id); continue }
+
+    await supabase.from('members').delete().eq('id', m.id)
+  }
+}
+
 // Get ALL tree data for every household in a sub caste (4 DB calls total)
 export async function getSubCasteTreeData(subCasteId: string) {
+  // Clean up any legacy in-household ancestor members before building the tree (never block the load)
+  try { await migrateInHouseholdAncestors(subCasteId) } catch {}
+
   const supabase = await createClient()
 
-  // Cast as any — head_father_name and is_virtual added by migrations 006/007
-  const { data: householdsRaw } = await supabase
-    .from('households')
-    .select('id, ghar_number, head_name, head_gender, dob_year, sub_caste_id, photo_url, head_father_name, is_virtual')
-    .eq('sub_caste_id', subCasteId)
-    .eq('is_active', true)
-    .order('ghar_number') as { data: any[] | null }
+  // death_year is added by migration 009 — fall back gracefully if it isn't applied yet
+  const hhCols = (death: boolean) =>
+    `id, ghar_number, head_name, head_gender, dob_year, ${death ? 'death_year, ' : ''}sub_caste_id, photo_url, head_father_name, is_virtual`
+
+  let { data: householdsRaw, error: hhErr } = await supabase
+    .from('households').select(hhCols(true))
+    .eq('sub_caste_id', subCasteId).eq('is_active', true)
+    .order('ghar_number') as { data: any[] | null; error: any }
+  if (hhErr) {
+    ({ data: householdsRaw } = await supabase
+      .from('households').select(hhCols(false))
+      .eq('sub_caste_id', subCasteId).eq('is_active', true)
+      .order('ghar_number') as { data: any[] | null; error: any })
+  }
 
   const households = householdsRaw ?? []
   if (!households.length) return { trees: [], crossLinks: [] }
 
   const householdIds = households.map((h: any) => h.id as string)
 
-  const { data: allMembers } = await supabase
-    .from('members')
-    .select('id, name, gender, relation_code, dob_year, photo_url, sub_caste_id, household_id')
+  const mCols = (death: boolean) =>
+    `id, name, gender, relation_code, dob_year, ${death ? 'death_year, ' : ''}photo_url, sub_caste_id, household_id`
+
+  let { data: allMembers, error: mErr } = await supabase
+    .from('members').select(mCols(true))
     .in('household_id', householdIds)
-    .order('member_number')
+    .order('member_number') as { data: any[] | null; error: any }
+  if (mErr) {
+    ({ data: allMembers } = await supabase
+      .from('members').select(mCols(false))
+      .in('household_id', householdIds)
+      .order('member_number') as { data: any[] | null; error: any })
+  }
 
   const allMemberIds = [...householdIds, ...(allMembers ?? []).map(m => m.id)]
   const { data: allLinks } = await supabase
@@ -231,7 +316,7 @@ export async function addAncestorMember(input: {
       member_number: ((lastMember?.member_number ?? 0) as number) + 1,
       name:          input.name,
       gender:        input.gender as 'Male' | 'Female',
-      relation_code: 'father',
+      relation_code: input.gender === 'Female' ? 'mother' : 'father',
       dob_year:      input.dobYear,
       sub_caste_id:  hh?.sub_caste_id,
     })
@@ -295,6 +380,53 @@ export async function createVirtualAncestor(input: {
 
   revalidatePath('/tree')
   return { householdId: vh.id }
+}
+
+// Mark a person deceased (or clear it) by setting the death year
+export async function setDeathYear(
+  id: string,
+  target: 'household' | 'member',
+  year: number | null,
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data: profile } = await supabase
+    .from('users').select('role').eq('id', user.id).single()
+  if (!profile || !['chief', 'admin'].includes(profile.role)) {
+    return { error: 'Only Admin or Chief can update this.' }
+  }
+
+  const table = target === 'household' ? 'households' : 'members'
+  const { error } = await (supabase as any).from(table).update({ death_year: year }).eq('id', id)
+  if (error) return { error: error.message }
+
+  revalidatePath('/tree')
+  return {}
+}
+
+// Remove the parent link of a child household (undo a cross-household link)
+export async function removeHouseholdLink(childHouseholdId: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data: profile } = await supabase
+    .from('users').select('role').eq('id', user.id).single()
+  if (!profile || !['chief', 'admin'].includes(profile.role)) {
+    return { error: 'Only Admin or Chief can unlink households.' }
+  }
+
+  const { error } = await (supabase as any)
+    .from('household_links')
+    .delete()
+    .eq('child_household_id', childHouseholdId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/tree')
+  return {}
 }
 
 // Create a cross-household link between two existing households

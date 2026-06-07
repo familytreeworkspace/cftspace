@@ -6,6 +6,7 @@ export interface TreeMember {
   gender: 'Male' | 'Female'
   relation_code: string
   dob_year: number | null
+  death_year?: number | null
   photo_url: string | null
   sub_caste_id: string | null
   household_id: string

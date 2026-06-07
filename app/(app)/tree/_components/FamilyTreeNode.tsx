@@ -16,14 +16,17 @@ export type FamilyNodeData = {
   linkMode: boolean
   isRoot: boolean       // topmost known ancestor → show top "+"
   isHead: boolean
+  isLinkedChild?: boolean   // this household is linked under a parent household
   householdId: string
   onAddRelative: (nodeId: string, position: 'top' | 'bottom') => void
+  onUnlink?: (householdId: string) => void
+  onMarkDeath?: (id: string, isHead: boolean, year: number | null) => void
 }
 
 const MALE_BG   = '#eff6ff'   // blue-50
 const MALE_BOR  = '#3b82f6'   // blue-500
-const FEM_BG    = '#f0fdf4'   // green-50
-const FEM_BOR   = '#22c55e'   // green-500
+const FEM_BG    = '#fdf2f8'   // pink-50
+const FEM_BOR   = '#ec4899'   // pink-500
 const DEAD_BG   = '#f1f5f9'   // slate-100
 const DEAD_BOR  = '#94a3b8'   // slate-400
 
@@ -51,16 +54,13 @@ function FemaleSymbol({ size }: { size: number }) {
   return (
     <svg width={size} height={size * 1.9} viewBox="0 0 40 76" fill="black">
       {/* Head */}
-      <circle cx="20" cy="8" r="8" />
-      {/* Dress body */}
-      <path d="M12 18 L10 52 L30 52 L28 18 Z" />
-      {/* Left arm */}
-      <rect x="4" y="18" width="8" height="16" rx="3" />
-      {/* Right arm */}
-      <rect x="28" y="18" width="8" height="16" rx="3" />
-      {/* Legs */}
-      <rect x="12" y="50" width="7" height="20" rx="3" />
-      <rect x="21" y="50" width="7" height="20" rx="3" />
+      <circle cx="20" cy="9" r="8" />
+      {/* Dress — triangular A-line skirt, narrow at shoulders, wide at hem */}
+      <path d="M13 19 L27 19 L37 54 L3 54 Z" />
+      {/* Left leg */}
+      <rect x="14" y="53" width="5" height="18" rx="2" />
+      {/* Right leg */}
+      <rect x="21" y="53" width="5" height="18" rx="2" />
     </svg>
   )
 }
@@ -82,12 +82,12 @@ function AddMenu({
     function handleClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose()
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
   }, [onClose])
 
   const topOptions    = ['Add Father', 'Add Mother', 'Add Brother', 'Add Sister']
-  const bottomOptions = ['Add Spouse', 'Add Child', 'Add Brother', 'Add Sister']
+  const bottomOptions = ['Add Spouse', 'Add Child', 'Add Brother', 'Add Sister', 'Mark Deceased']
   const options = position === 'top' ? topOptions : bottomOptions
 
   return (
@@ -116,6 +116,7 @@ export const FamilyTreeNode = memo(function FamilyTreeNode({ data, selected }: N
   const d = data as FamilyNodeData
   const [topMenu, setTopMenu]       = useState(false)
   const [bottomMenu, setBottomMenu] = useState(false)
+  const [deathModal, setDeathModal] = useState(false)
 
   const isDeceased = !!(d.dobDeathYear)
   const bg  = isDeceased ? DEAD_BG  : d.gender === 'Female' ? FEM_BG  : MALE_BG
@@ -123,17 +124,18 @@ export const FamilyTreeNode = memo(function FamilyTreeNode({ data, selected }: N
   const symbolSize = 22
 
   function handleAdd(nodeId: string, pos: 'top' | 'bottom', type: string) {
-    d.onAddRelative(nodeId, pos)
     setTopMenu(false)
     setBottomMenu(false)
+    if (type === 'Mark Deceased') { setDeathModal(true); return }
+    d.onAddRelative(nodeId, pos)
   }
 
   return (
-    <div className="relative flex flex-col items-center nodrag" style={{ userSelect: 'none' }}>
+    <div className="relative flex flex-col items-center" style={{ userSelect: 'none' }}>
 
-      {/* Top "+" — only on root node */}
+      {/* Top "+" — absolutely positioned so it floats above the card without pushing it down */}
       {d.canEdit && d.isRoot && (
-        <div className="relative mb-1">
+        <div className="absolute left-1/2 -translate-x-1/2 z-10 nodrag" style={{ top: '-26px' }}>
           <button
             onClick={(e) => { e.stopPropagation(); setTopMenu(v => !v); setBottomMenu(false) }}
             className="w-5 h-5 rounded-full bg-blue-500 text-white text-sm font-bold flex items-center justify-center hover:bg-blue-600 shadow transition-colors"
@@ -161,14 +163,14 @@ export const FamilyTreeNode = memo(function FamilyTreeNode({ data, selected }: N
           pointerEvents: d.linkMode ? 'auto' : 'none',
         }}
       />
-      {/* Right — spouse source (husband right side), fixed at CARD_MID=53px from node top */}
+      {/* Right — spouse source (husband right side), at card vertical centre = 53px */}
       <Handle
         id="spouse-r"
         type="source"
         position={Position.Right}
         style={{ background: 'transparent', border: 'none', width: 0, height: 0, top: '53px' }}
       />
-      {/* Left — spouse target (wife left side), fixed at CARD_MID=53px from node top */}
+      {/* Left — spouse target (wife left side), at card vertical centre = 53px */}
       <Handle
         id="spouse-l"
         type="target"
@@ -253,13 +255,26 @@ export const FamilyTreeNode = memo(function FamilyTreeNode({ data, selected }: N
         }}
       />
 
-      {/* Bottom "+" */}
+      {/* Unlink button — top-left, only for linked child households while in Link Mode */}
+      {d.canEdit && d.linkMode && d.isLinkedChild && (
+        <div className="absolute z-30 nodrag" style={{ top: 4, left: 'calc(50% - 60px + 4px)' }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); d.onUnlink?.(d.householdId) }}
+            className="w-5 h-5 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center hover:bg-red-600 shadow transition-colors"
+            title="Unlink from parent family"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* "+" add button — top-right corner of the card */}
       {d.canEdit && (
-        <div className="relative mt-1">
+        <div className="absolute z-30 nodrag" style={{ top: 4, right: 'calc(50% - 60px + 4px)' }}>
           <button
             onClick={(e) => { e.stopPropagation(); setBottomMenu(v => !v); setTopMenu(false) }}
             className="w-5 h-5 rounded-full bg-emerald-500 text-white text-sm font-bold flex items-center justify-center hover:bg-emerald-600 shadow transition-colors"
-            title="Add below"
+            title="Add relative"
           >
             +
           </button>
@@ -269,6 +284,75 @@ export const FamilyTreeNode = memo(function FamilyTreeNode({ data, selected }: N
         </div>
       )}
 
+      {deathModal && (
+        <DeathModal
+          name={d.name}
+          currentYear={d.dobDeathYear ?? null}
+          onSave={(year) => { d.onMarkDeath?.(d.id, d.isHead, year); setDeathModal(false) }}
+          onClose={() => setDeathModal(false)}
+        />
+      )}
+
     </div>
   )
 })
+
+// ── Death year modal ──────────────────────────────────────────
+function DeathModal({
+  name, currentYear, onSave, onClose,
+}: {
+  name: string
+  currentYear: number | null
+  onSave: (year: number | null) => void
+  onClose: () => void
+}) {
+  const [year, setYear] = useState(currentYear ? String(currentYear) : '')
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault()
+    const y = year.trim() ? parseInt(year) : null
+    if (year.trim() && (isNaN(y!) || y! < 1800 || y! > new Date().getFullYear())) return
+    onSave(y)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] nodrag"
+         onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-[340px] max-w-full mx-4"
+           onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-semibold text-gray-800 text-base mb-1">Mark Deceased</h3>
+        <p className="text-xs text-gray-500 mb-4">
+          <span className="font-medium text-gray-700">{name}</span> — enter year of death
+        </p>
+        <form onSubmit={submit} className="space-y-3">
+          <input
+            type="number"
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-slate-400"
+            placeholder="e.g. 2010"
+            min={1800}
+            max={new Date().getFullYear()}
+            autoFocus
+          />
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors">
+              Cancel
+            </button>
+            {currentYear && (
+              <button type="button" onClick={() => onSave(null)}
+                className="px-3 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors">
+                Mark Alive
+              </button>
+            )}
+            <button type="submit"
+              className="flex-1 py-2.5 text-sm bg-slate-600 text-white rounded-xl hover:bg-slate-700 transition-colors font-medium">
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}

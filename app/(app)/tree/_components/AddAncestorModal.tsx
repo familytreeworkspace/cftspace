@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { addAncestorMember } from '@/app/actions/tree'
+import { createVirtualAncestor } from '@/app/actions/tree'
 import type { AncestorTrigger } from './MemberFlowNode'
 
 interface Props {
@@ -22,11 +22,13 @@ export function AddAncestorModal({ info, onCreated, onCancel }: Props) {
     if (!name.trim()) { setError('Name is required'); return }
     setError('')
     start(async () => {
-      const result = await addAncestorMember({
-        householdId: info.householdId,
+      const result = await createVirtualAncestor({
         name: name.trim(),
         gender,
         dobYear: dobYear ? parseInt(dobYear) : null,
+        subCasteId: info.subCasteId,
+        childHouseholdId: info.householdId,
+        relation: gender === 'Female' ? 'mother' : 'father',
       })
       if (result.error) { setError(result.error); return }
       onCreated()
