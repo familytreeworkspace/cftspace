@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { login } from '@/app/actions/auth'
 
 const translations = {
-  'auth.platform': 'Community Family Tree Platform',
+  'auth.platform': ' ',
   'auth.signInTitle': 'Sign In',
   'auth.email': 'Email',
   'auth.password': 'Password',
@@ -40,7 +40,7 @@ export default function LoginPage() {
                 d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">CFTSpace</h1>
+          <h1 className="text-3xl font-bold text-white tracking-tight">Community Family Tree Space</h1>
           <p className="text-blue-200 mt-1 text-sm">{t('auth.platform')}</p>
         </div>
 

@@ -8,12 +8,12 @@ export default async function TreePage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('users').select('role, caste_id').eq('id', user.id).single()
+    .from('users').select('role, caste_id, name').eq('id', user.id).single()
   if (!profile) redirect('/login')
 
   const canEdit = ['chief', 'admin'].includes(profile.role)
+  const isViewer = profile.role === 'viewer'
 
-  // Fetch sub castes — admin sees only their caste's sub castes
   const scQuery = supabase
     .from('sub_castes')
     .select('id, name, name_sindhi')
@@ -27,6 +27,8 @@ export default async function TreePage() {
     <TreeExplorer
       subCastes={subCastes ?? []}
       canEdit={canEdit}
+      isViewer={isViewer}
+      userName={profile.name ?? user.email ?? ''}
     />
   )
 }

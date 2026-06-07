@@ -1,10 +1,11 @@
 'use client'
 
-import { getAgeCategory, type TreeMember } from '@/lib/tree-utils'
+import { getAgeCategory, getRelationLabel, type TreeMember } from '@/lib/tree-utils'
 
 interface TreeNodeProps {
   member: TreeMember
   graphicMode: boolean
+  isHead?: boolean
   isSelected?: boolean
   isDragOver?: boolean
   canEdit?: boolean
@@ -17,6 +18,7 @@ interface TreeNodeProps {
 export default function TreeNodeComponent({
   member,
   graphicMode,
+  isHead,
   isSelected,
   isDragOver,
   canEdit,
@@ -26,8 +28,7 @@ export default function TreeNodeComponent({
   onDrop,
 }: TreeNodeProps) {
   const ageCategory = getAgeCategory(member.dob_year)
-  const currentYear = new Date().getFullYear()
-  const age = member.dob_year ? currentYear - member.dob_year : null
+  const isFemale    = member.gender?.toLowerCase() === 'female'
 
   function handleDragStart(e: React.DragEvent) {
     e.dataTransfer.effectAllowed = 'move'
@@ -45,10 +46,13 @@ export default function TreeNodeComponent({
     onDrop?.(member.id)
   }
 
+  const memberWithHead = isHead ? { ...member, is_head: true } : member
+  const relationLabel  = getRelationLabel(memberWithHead)
+
   const nodeClasses = [
     'flex flex-col items-center gap-1 cursor-pointer select-none transition-all',
-    isSelected  ? 'scale-110' : 'hover:scale-105',
-    isDragOver  ? 'opacity-70' : '',
+    isSelected ? 'scale-110' : 'hover:scale-105',
+    isDragOver ? 'opacity-70' : '',
   ].join(' ')
 
   return (
@@ -66,75 +70,79 @@ export default function TreeNodeComponent({
         graphicMode ? 'w-16 h-16' : 'w-12 h-12',
         isSelected
           ? 'border-blue-500 ring-2 ring-blue-300'
-          : member.gender === 'Female'
-            ? 'border-pink-300'
-            : 'border-blue-300',
-        'bg-white shadow-sm',
+          : isFemale
+            ? 'border-pink-300 bg-pink-50'
+            : 'border-blue-300 bg-blue-50',
       ].join(' ')}>
         {graphicMode && member.photo_url ? (
-          // Photo
           <img
             src={member.photo_url}
             alt={member.name}
             className="w-full h-full rounded-full object-cover"
           />
         ) : (
-          // Age/gender symbol
           <Symbol
-            gender={member.gender as 'Male' | 'Female'}
+            isFemale={isFemale}
             ageCategory={ageCategory}
-            graphicMode={graphicMode}
+            size={graphicMode ? 38 : 30}
           />
         )}
 
-        {/* Gender indicator dot */}
+        {/* Gender dot */}
         <span className={[
-          'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border border-white text-[8px] flex items-center justify-center',
-          member.gender === 'Female' ? 'bg-pink-400' : 'bg-blue-400',
+          'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white',
+          isFemale ? 'bg-pink-400' : 'bg-blue-400',
         ].join(' ')} />
       </div>
 
-      {/* Name */}
-      <div className="text-center max-w-[80px]">
-        <div className="text-xs font-medium text-gray-800 leading-tight truncate">
+      {/* Name + Relation */}
+      <div className="text-center max-w-[90px]">
+        <div className="text-xs font-semibold text-gray-800 leading-tight truncate">
           {member.name}
         </div>
+        <div className={[
+          'text-[10px] font-medium mt-0.5',
+          isFemale ? 'text-pink-500' : 'text-blue-500',
+        ].join(' ')}>
+          {relationLabel}
+        </div>
         {member.dob_year && (
-          <div className="text-[10px] text-gray-400">{member.dob_year}</div>
+          <div className="text-[9px] text-gray-400 leading-tight">{member.dob_year}</div>
         )}
       </div>
-
-      {/* Drag hint */}
-      {canEdit && (
-        <div className="text-[9px] text-gray-300 opacity-0 group-hover:opacity-100">
-          drag to link
-        </div>
-      )}
     </div>
   )
 }
 
-// SVG symbols per age/gender
+// Clearly distinct male/female SVG symbols per age category
 function Symbol({
-  gender,
+  isFemale,
   ageCategory,
-  graphicMode,
+  size,
 }: {
-  gender: 'Male' | 'Female'
+  isFemale: boolean
   ageCategory: 'child' | 'adult' | 'elder' | 'unknown'
-  graphicMode: boolean
+  size: number
 }) {
-  const size  = graphicMode ? 36 : 28
-  const color = gender === 'Female' ? '#e879a0' : '#3b82f6'
+  const color = isFemale ? '#ec4899' : '#3b82f6'
 
   if (ageCategory === 'child') {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        {/* Child — small figure */}
-        <circle cx="12" cy="6" r="3" fill={color} opacity="0.9" />
-        <path d="M12 9 L10 15 L12 14 L14 15 L12 9Z" fill={color} opacity="0.8" />
-        <path d="M10 15 L8 20 M14 15 L16 20" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-        <path d="M9 11 L7 13 M15 11 L17 13" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+        <circle cx="12" cy="5.5" r="3" fill={color} />
+        {isFemale ? (
+          /* Girl — small dress */
+          <path d="M10 9 L14 9 L16 19 L8 19 Z" fill={color} opacity="0.75" />
+        ) : (
+          /* Boy — shorts + legs */
+          <>
+            <rect x="9.5" y="9" width="5" height="4" rx="1" fill={color} opacity="0.85" />
+            <rect x="9.5" y="13" width="2" height="6" rx="1" fill={color} opacity="0.85" />
+            <rect x="12.5" y="13" width="2" height="6" rx="1" fill={color} opacity="0.85" />
+          </>
+        )}
+        <line x1="9" y1="10.5" x2="7" y2="13" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+        <line x1="15" y1="10.5" x2="17" y2="13" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
       </svg>
     )
   }
@@ -142,32 +150,46 @@ function Symbol({
   if (ageCategory === 'elder') {
     return (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        {/* Elder — figure with cane */}
-        <circle cx="12" cy="5" r="3" fill={color} opacity="0.9" />
-        <path d="M12 8 L10 14 L12 13 L14 14 L12 8Z" fill={color} opacity="0.8" />
-        <path d="M10 14 L9 20 M14 14 L13 20" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-        <path d="M9 10 L7 12 M15 10 L16 11" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
-        {/* Cane */}
-        <path d="M13 20 L16 17 L16 13" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+        <circle cx="12" cy="4.5" r="3" fill={color} />
+        {isFemale ? (
+          /* Elderly woman — dress + shawl */
+          <path d="M9 8 L15 8 L17 19 L7 19 Z" fill={color} opacity="0.7" />
+        ) : (
+          /* Elderly man — pants + cane */
+          <>
+            <rect x="9.5" y="8" width="5" height="5" rx="1" fill={color} opacity="0.85" />
+            <rect x="9.5" y="13" width="2" height="6" rx="1" fill={color} opacity="0.85" />
+            <rect x="12.5" y="13" width="2" height="6" rx="1" fill={color} opacity="0.85" />
+            {/* Cane */}
+            <line x1="16" y1="12" x2="16" y2="19" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+            <line x1="14" y1="12" x2="16" y2="12" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+          </>
+        )}
+        <line x1="9" y1="9.5" x2="6.5" y2="12" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+        <line x1="15" y1="9.5" x2="17.5" y2="12" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
       </svg>
     )
   }
 
-  // Adult (default)
+  // Adult
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="5" r="3.5" fill={color} opacity="0.9" />
-      {gender === 'Female' ? (
+      <circle cx="12" cy="4.5" r="3.5" fill={color} />
+      {isFemale ? (
+        /* Woman — dress/skirt flare */
         <>
-          {/* Female adult — dress silhouette */}
-          <path d="M12 9 C9 9 8 12 8 15 L9 15 L9 20 L15 20 L15 15 L16 15 C16 12 15 9 12 9Z" fill={color} opacity="0.75" />
-          <path d="M9 11 L7 13 M15 11 L17 13" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+          <path d="M9.5 8.5 L14.5 8.5 L17 20 L7 20 Z" fill={color} opacity="0.75" />
+          <line x1="9.5" y1="10" x2="6.5" y2="13.5" stroke={color} strokeWidth="2" strokeLinecap="round" />
+          <line x1="14.5" y1="10" x2="17.5" y2="13.5" stroke={color} strokeWidth="2" strokeLinecap="round" />
         </>
       ) : (
+        /* Man — shirt + trousers */
         <>
-          {/* Male adult — standing figure */}
-          <path d="M12 9 L10 15 L11.5 15 L11.5 20 L12.5 20 L12.5 15 L14 15 L12 9Z" fill={color} opacity="0.8" />
-          <path d="M9 10.5 L7 13 M15 10.5 L17 13" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+          <rect x="9" y="8.5" width="6" height="5.5" rx="1" fill={color} opacity="0.85" />
+          <rect x="9" y="14" width="2.5" height="6" rx="1" fill={color} opacity="0.85" />
+          <rect x="12.5" y="14" width="2.5" height="6" rx="1" fill={color} opacity="0.85" />
+          <line x1="9" y1="10" x2="6" y2="13.5" stroke={color} strokeWidth="2" strokeLinecap="round" />
+          <line x1="15" y1="10" x2="18" y2="13.5" stroke={color} strokeWidth="2" strokeLinecap="round" />
         </>
       )}
     </svg>

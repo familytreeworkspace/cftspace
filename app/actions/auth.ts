@@ -18,8 +18,12 @@ export async function login(formData: FormData) {
     return { error: error.message }
   }
 
+  // Redirect viewer directly to tree, everyone else to dashboard
+  const { data: profile } = await supabase
+    .from('users').select('role').eq('id', (await supabase.auth.getUser()).data.user!.id).single()
+
   revalidatePath('/', 'layout')
-  redirect('/dashboard')
+  redirect(profile?.role === 'viewer' ? '/tree' : '/dashboard')
 }
 
 export async function logout() {

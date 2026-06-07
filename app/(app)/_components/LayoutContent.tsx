@@ -21,6 +21,15 @@ export default function LayoutContent({
   const pathname = usePathname()
   const isTreePage = pathname.startsWith('/tree')
 
+  // Viewer gets full-screen tree — no sidebar, no header
+  if (userRole === 'viewer') {
+    return (
+      <div className="h-screen overflow-hidden bg-slate-50">
+        {children}
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <AppSidebar userRole={userRole} autoCollapse={isTreePage} />

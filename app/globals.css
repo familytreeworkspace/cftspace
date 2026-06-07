@@ -186,3 +186,13 @@
   .print\:hidden { display: none !important; }
   body { background: white; color: black; }
 }
+
+/* React Flow — prevent edge paths from being clipped when they span
+   beyond the visible viewport (common with wide family trees)          */
+.react-flow__edges,
+.react-flow__edges svg {
+  overflow: visible !important;
+}
+.react-flow__edge path {
+  pointer-events: stroke;
+}

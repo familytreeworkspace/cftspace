@@ -10,6 +10,9 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const { data: roleCheck } = await supabase.from('users').select('role').eq('id', user.id).single()
+  if (roleCheck?.role === 'viewer') redirect('/tree')
+
   // Fetch real stats in parallel
   const [
     { count: householdCount },
