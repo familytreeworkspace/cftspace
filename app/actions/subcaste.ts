@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { autoInsertIntoDirectory } from '@/app/actions/directory'
 
 export async function createSubCaste(formData: FormData): Promise<{ error?: string }> {
   const supabase = await createClient()
@@ -24,6 +25,10 @@ export async function createSubCaste(formData: FormData): Promise<{ error?: stri
 
   if (error) return { error: error.message }
 
+  // Auto-insert sub caste name into Directory
+  const word = nameSindhi || name
+  if (word) await autoInsertIntoDirectory(word, 'sub_caste')
+
   revalidatePath('/subcaste')
   return {}
 }
@@ -31,13 +36,21 @@ export async function createSubCaste(formData: FormData): Promise<{ error?: stri
 export async function updateSubCaste(id: string, formData: FormData): Promise<{ error?: string }> {
   const supabase = await createClient()
 
+  const name       = (formData.get('name') as string)?.trim()
+  const nameSindhi = (formData.get('name_sindhi') as string)?.trim() || null
+  const nameHindi  = (formData.get('name_hindi') as string)?.trim() || null
+
   const { error } = await supabase.from('sub_castes').update({
-    name:        (formData.get('name') as string)?.trim(),
-    name_sindhi: (formData.get('name_sindhi') as string)?.trim() || null,
-    name_hindi:  (formData.get('name_hindi') as string)?.trim() || null,
+    name,
+    name_sindhi: nameSindhi,
+    name_hindi:  nameHindi,
   }).eq('id', id)
 
   if (error) return { error: error.message }
+
+  // Auto-insert updated name into Directory
+  const word = nameSindhi || name
+  if (word) await autoInsertIntoDirectory(word, 'sub_caste')
 
   revalidatePath('/subcaste')
   return {}

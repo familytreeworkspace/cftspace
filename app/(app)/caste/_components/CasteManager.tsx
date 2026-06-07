@@ -53,12 +53,7 @@ export default function CasteManager({ castes }: { castes: Caste[] }) {
       if (result.error) {
         setError(result.error)
       } else {
-        setShowForm(false)
-        setEditItem(null)
-        setNameValue('')
-        setSindhiName('')
-        setHindiName('')
-        setConfidence(0)
+        window.location.reload()
       }
     })
   }
@@ -69,8 +64,10 @@ export default function CasteManager({ castes }: { castes: Caste[] }) {
       const result = await deleteCaste(id)
       if (result.error) {
         setError(result.error)
+        setConfirmDel(null)
+      } else {
+        window.location.reload()
       }
-      setConfirmDel(null)
     })
   }
 

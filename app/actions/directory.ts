@@ -14,6 +14,14 @@ export interface DirectoryEntry {
   updated_at: string
 }
 
+// Tracks which DB records have blank fields — computed during Sync, consumed by Backfill
+export interface BackfillTarget {
+  table: 'households' | 'members'
+  id: string
+  sindhi_name: string
+  blank_fields: string[]
+}
+
 function decryptCredential(encrypted: string): string {
   return Buffer.from(encrypted, 'base64').toString('utf-8')
 }
@@ -275,7 +283,7 @@ export async function convertSingleEntry(id: string): Promise<{
 
 // ── Auto-backfill ─────────────────────────────────────────────────────────────
 
-export async function autoBackfill(): Promise<{
+export async function autoBackfill(targets?: BackfillTarget[]): Promise<{
   householdsUpdated: number
   membersUpdated: number
   errors: string[]
@@ -289,64 +297,101 @@ export async function autoBackfill(): Promise<{
     let householdsUpdated = 0
     let membersUpdated    = 0
 
-    // Load directory entries with at least one translation filled
-    const { data: dirEntries } = await (supabase
+    // Fetch ALL directory entries, filter in JS (avoids unreliable PostgREST .not.is.null syntax)
+    const { data: allDirEntries, error: dirErr } = await supabase
       .from('directory')
       .select('sindhi_word, english_word, hindi_word')
-      .or('english_word.not.is.null,hindi_word.not.is.null')) as any
 
-    if (!dirEntries?.length) return { householdsUpdated: 0, membersUpdated: 0, errors: [] }
+    if (dirErr) return { householdsUpdated: 0, membersUpdated: 0, errors: [`Directory read error: ${dirErr.message}`] }
 
+    // Only keep entries that have at least one translation filled
+    const dirEntries = (allDirEntries ?? []).filter(e => e.english_word || e.hindi_word)
+    if (!dirEntries.length) return { householdsUpdated: 0, membersUpdated: 0, errors: ['No translated entries found in Directory. Run AI Convert first.'] }
+
+    // Build lookup: trim sindhi_word to handle any whitespace differences
     const lookup = new Map<string, { english: string | null; hindi: string | null }>()
-    for (const e of dirEntries as any[]) {
-      lookup.set(e.sindhi_word, { english: e.english_word, hindi: e.hindi_word })
+    for (const e of dirEntries) {
+      lookup.set(e.sindhi_word.trim(), { english: e.english_word, hindi: e.hindi_word })
     }
 
-    // Households
+    // ── Targeted mode: use pre-computed list from Sync ────────────────────────
+    if (targets && targets.length > 0) {
+      for (const target of targets) {
+        const entry = lookup.get(target.sindhi_name.trim())
+        if (!entry) continue
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const upd: Record<string, string | null> = {}
+        for (const field of target.blank_fields) {
+          if (field === 'head_name_sindhi' || field === 'name_sindhi') {
+            upd[field] = target.sindhi_name
+          } else if ((field === 'head_name_hindi' || field === 'name_hindi') && entry.hindi) {
+            upd[field] = entry.hindi
+          } else if ((field === 'head_name' || field === 'name') && entry.english) {
+            upd[field] = entry.english
+          }
+        }
+
+        if (Object.keys(upd).length === 0) continue
+
+        const { error } = await (supabase.from(target.table) as any).update(upd).eq('id', target.id)
+        if (error) errors.push(`${target.table} ${target.id}: ${error.message}`)
+        else if (target.table === 'households') householdsUpdated++
+        else membersUpdated++
+      }
+
+      revalidatePath('/directory')
+      return { householdsUpdated, membersUpdated, errors }
+    }
+
+    // ── Fallback: full scan (when called without pre-computed targets) ────────
+
+    // Households — fill head_name, head_name_sindhi, head_name_hindi
     const { data: households } = await supabase
       .from('households')
       .select('id, head_name, head_name_sindhi, head_name_hindi')
-      .or('head_name_sindhi.is.null,head_name_hindi.is.null')
 
     for (const hh of households ?? []) {
-      const sindhiKey = hh.head_name_sindhi
-        || (isSindhiScript(hh.head_name ?? '') ? hh.head_name : null)
-      if (!sindhiKey) continue
+      // Use any available name as lookup key — no script filter
+      const key = hh.head_name_sindhi?.trim() || hh.head_name?.trim()
+      if (!key) continue
 
-      const entry = lookup.get(sindhiKey)
+      const entry = lookup.get(key)
       if (!entry) continue
 
-      const upd: Partial<typeof hh> = {}
-      if (!hh.head_name_sindhi) upd.head_name_sindhi = sindhiKey
-      if (!hh.head_name_hindi && entry.hindi) upd.head_name_hindi = entry.hindi
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const upd: Record<string, string | null> = {}
+      if (!hh.head_name_sindhi?.trim() && isSindhiScript(key)) upd.head_name_sindhi = key
+      if (!hh.head_name_hindi?.trim() && entry.hindi) upd.head_name_hindi = entry.hindi
+      if ((!hh.head_name?.trim() || isSindhiScript(hh.head_name)) && entry.english) upd.head_name = entry.english
 
       if (Object.keys(upd).length > 0) {
-        const { error } = await supabase.from('households').update(upd).eq('id', hh.id)
+        const { error } = await (supabase.from('households') as any).update(upd).eq('id', hh.id)
         if (error) errors.push(`Household ${hh.id}: ${error.message}`)
         else householdsUpdated++
       }
     }
 
-    // Members
+    // Members — fill name, name_sindhi, name_hindi
     const { data: members } = await supabase
       .from('members')
       .select('id, name, name_sindhi, name_hindi')
-      .or('name_sindhi.is.null,name_hindi.is.null')
 
     for (const m of members ?? []) {
-      const sindhiKey = m.name_sindhi
-        || (isSindhiScript(m.name ?? '') ? m.name : null)
-      if (!sindhiKey) continue
+      const key = m.name_sindhi?.trim() || m.name?.trim()
+      if (!key) continue
 
-      const entry = lookup.get(sindhiKey)
+      const entry = lookup.get(key)
       if (!entry) continue
 
-      const upd: Partial<typeof m> = {}
-      if (!m.name_sindhi) upd.name_sindhi = sindhiKey
-      if (!m.name_hindi && entry.hindi) upd.name_hindi = entry.hindi
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const upd: Record<string, string | null> = {}
+      if (!m.name_sindhi?.trim() && isSindhiScript(key)) upd.name_sindhi = key
+      if (!m.name_hindi?.trim() && entry.hindi) upd.name_hindi = entry.hindi
+      if ((!m.name?.trim() || isSindhiScript(m.name)) && entry.english) upd.name = entry.english
 
       if (Object.keys(upd).length > 0) {
-        const { error } = await supabase.from('members').update(upd).eq('id', m.id)
+        const { error } = await (supabase.from('members') as any).update(upd).eq('id', m.id)
         if (error) errors.push(`Member ${m.id}: ${error.message}`)
         else membersUpdated++
       }
@@ -365,11 +410,13 @@ export async function syncFromDatabase(): Promise<{
   inserted: number
   skipped: number
   errors: string[]
+  pendingBackfill: BackfillTarget[]
 }> {
+  const empty = { inserted: 0, skipped: 0, errors: [] as string[], pendingBackfill: [] as BackfillTarget[] }
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { inserted: 0, skipped: 0, errors: ['Not authenticated'] }
+    if (!user) return { ...empty, errors: ['Not authenticated'] }
 
     // Load existing sindhi_words already in Directory
     const { data: existing, error: existErr } = await supabase
@@ -378,58 +425,97 @@ export async function syncFromDatabase(): Promise<{
 
     if (existErr) {
       return {
-        inserted: 0, skipped: 0,
+        ...empty,
         errors: [`Directory table error: ${existErr.message}. Make sure you have run the SQL migration to create the directory table.`],
       }
     }
 
     const alreadyIn = new Set((existing ?? []).map(e => e.sindhi_word))
     const toInsert: { sindhi_word: string; english_word: string | null; hindi_word: null; category: string }[] = []
+    const pendingBackfill: BackfillTarget[] = []
 
-    // Households: prefer head_name_sindhi, fallback to head_name
+    // Households: select all name + translation columns to detect blanks in one pass
     const { data: households, error: hhErr } = await supabase
       .from('households')
-      .select('head_name, head_name_sindhi')
+      .select('id, head_name, head_name_sindhi, head_name_hindi')
 
-    if (hhErr) return { inserted: 0, skipped: 0, errors: [`Households query error: ${hhErr.message}`] }
+    if (hhErr) return { ...empty, errors: [`Households query error: ${hhErr.message}`] }
 
     for (const hh of households ?? []) {
-      const word = hh.head_name_sindhi || hh.head_name
-      if (!word?.trim()) continue
-      const w = word.trim()
-      if (alreadyIn.has(w)) continue
-      alreadyIn.add(w)
-      toInsert.push({
-        sindhi_word:  w,
-        english_word: isSindhiScript(w) ? null : w,
-        hindi_word:   null,
-        category: 'name',
-      })
+      // Use whatever name is available — English or Sindhi, no script filter
+      const key = hh.head_name_sindhi?.trim() || hh.head_name?.trim()
+      if (!key) continue
+
+      if (!alreadyIn.has(key)) {
+        alreadyIn.add(key)
+        toInsert.push({
+          sindhi_word:  key,
+          // If already English, pre-fill english_word so AI convert is not needed
+          english_word: isSindhiScript(key) ? null : key,
+          hindi_word:   null,
+          category: 'name',
+        })
+      }
+
+      // Track which fields are blank — backfill will fill these
+      const blanks: string[] = []
+      if (!hh.head_name_sindhi?.trim())  blanks.push('head_name_sindhi')
+      if (!hh.head_name_hindi?.trim())   blanks.push('head_name_hindi')
+      // head_name needs update only if blank or still in Sindhi script
+      if (!hh.head_name?.trim() || isSindhiScript(hh.head_name)) blanks.push('head_name')
+      if (blanks.length) pendingBackfill.push({ table: 'households', id: hh.id, sindhi_name: key, blank_fields: blanks })
     }
 
-    // Members: prefer name_sindhi, fallback to name
+    // Sub castes — store all names regardless of script
+    const { data: subCastes } = await supabase
+      .from('sub_castes')
+      .select('name, name_sindhi, name_hindi')
+
+    for (const sc of subCastes ?? []) {
+      const key = sc.name_sindhi?.trim() || sc.name?.trim()
+      if (!key) continue
+
+      if (!alreadyIn.has(key)) {
+        alreadyIn.add(key)
+        toInsert.push({
+          sindhi_word:  key,
+          english_word: isSindhiScript(key) ? null : key,
+          hindi_word:   null,
+          category: 'sub_caste',
+        })
+      }
+    }
+
+    // Members — all names, no script filter
     const { data: members, error: memErr } = await supabase
       .from('members')
-      .select('name, name_sindhi')
+      .select('id, name, name_sindhi, name_hindi')
 
-    if (memErr) return { inserted: 0, skipped: 0, errors: [`Members query error: ${memErr.message}`] }
+    if (memErr) return { ...empty, errors: [`Members query error: ${memErr.message}`] }
 
     for (const m of members ?? []) {
-      const word = m.name_sindhi || m.name
-      if (!word?.trim()) continue
-      const w = word.trim()
-      if (alreadyIn.has(w)) continue
-      alreadyIn.add(w)
-      toInsert.push({
-        sindhi_word:  w,
-        english_word: isSindhiScript(w) ? null : w,
-        hindi_word:   null,
-        category: 'name',
-      })
+      const key = m.name_sindhi?.trim() || m.name?.trim()
+      if (!key) continue
+
+      if (!alreadyIn.has(key)) {
+        alreadyIn.add(key)
+        toInsert.push({
+          sindhi_word:  key,
+          english_word: isSindhiScript(key) ? null : key,
+          hindi_word:   null,
+          category: 'name',
+        })
+      }
+
+      const blanks: string[] = []
+      if (!m.name_sindhi?.trim())  blanks.push('name_sindhi')
+      if (!m.name_hindi?.trim())   blanks.push('name_hindi')
+      if (!m.name?.trim() || isSindhiScript(m.name)) blanks.push('name')
+      if (blanks.length) pendingBackfill.push({ table: 'members', id: m.id, sindhi_name: key, blank_fields: blanks })
     }
 
     if (!toInsert.length) {
-      return { inserted: 0, skipped: existing?.length ?? 0, errors: [] }
+      return { inserted: 0, skipped: existing?.length ?? 0, errors: [], pendingBackfill }
     }
 
     // Insert in chunks of 100
@@ -451,11 +537,8 @@ export async function syncFromDatabase(): Promise<{
     }
 
     revalidatePath('/directory')
-    return { inserted, skipped: existing?.length ?? 0, errors }
+    return { inserted, skipped: existing?.length ?? 0, errors, pendingBackfill }
   } catch (err: any) {
-    return {
-      inserted: 0, skipped: 0,
-      errors: [`Unexpected error: ${err.message}`],
-    }
+    return { ...empty, errors: [`Unexpected error: ${err.message}`] }
   }
 }

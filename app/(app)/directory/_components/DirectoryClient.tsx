@@ -10,9 +10,9 @@ import {
   autoBackfill,
   syncFromDatabase,
 } from '@/app/actions/directory'
-import type { DirectoryEntry } from '@/app/actions/directory'
+import type { DirectoryEntry, BackfillTarget } from '@/app/actions/directory'
 
-const CATEGORIES = ['name', 'place', 'profession', 'education']
+const CATEGORIES = ['name', 'sub_caste', 'place', 'profession', 'education']
 
 export default function DirectoryClient({
   initialEntries,
@@ -38,6 +38,8 @@ export default function DirectoryClient({
   const [syncResult, setSyncResult]         = useState<{
     inserted: number; skipped: number; errors: string[]
   } | null>(null)
+  // Pre-computed backfill targets from last Sync run
+  const [pendingBackfill, setPendingBackfill] = useState<BackfillTarget[]>([])
   const [isPending, startTransition]        = useTransition()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const inputRef = useRef<any>(null)
@@ -134,8 +136,11 @@ export default function DirectoryClient({
   function handleBackfill() {
     setBackfillResult(null)
     startTransition(async () => {
-      const result = await autoBackfill()
+      // Use pre-computed targets from last Sync if available — no re-scan needed
+      const result = await autoBackfill(pendingBackfill.length ? pendingBackfill : undefined)
       setBackfillResult(result)
+      // Clear targets after backfill
+      if (!result.errors.length) setPendingBackfill([])
     })
   }
 
@@ -144,6 +149,8 @@ export default function DirectoryClient({
     startTransition(async () => {
       const result = await syncFromDatabase()
       setSyncResult(result)
+      // Store pending backfill targets discovered during sync
+      setPendingBackfill(result.pendingBackfill ?? [])
       if (result.inserted > 0) window.location.reload()
     })
   }
@@ -385,17 +392,35 @@ export default function DirectoryClient({
 
         {/* Auto-backfill */}
         <div className="bg-card rounded-xl border border-border p-5 space-y-3">
-          <h3 className="font-semibold text-foreground">Auto-backfill</h3>
+          <h3 className="font-semibold text-foreground flex items-center justify-between">
+            Auto-backfill
+            {pendingBackfill.length > 0 && (
+              <span className="text-xs font-medium bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">
+                {pendingBackfill.length} pending
+              </span>
+            )}
+          </h3>
           <p className="text-xs text-muted-foreground">
-            After AI fills Directory, scan Households and Members to populate blank Sindhi / Hindi columns.
+            After AI fills Directory, write English / Sindhi / Hindi back into Households and Members.
+            {pendingBackfill.length > 0 && (
+              <span className="block mt-1 text-amber-600">
+                Sync found {pendingBackfill.filter(t => t.table === 'households').length} households and{' '}
+                {pendingBackfill.filter(t => t.table === 'members').length} members with blank fields.
+              </span>
+            )}
           </p>
 
           <button
             onClick={handleBackfill}
             disabled={isPending}
-            className="w-full px-3 py-2 text-sm font-medium rounded-lg border border-primary text-primary hover:bg-primary hover:text-primary-foreground disabled:opacity-50 transition-colors"
+            className={[
+              'w-full px-3 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50',
+              pendingBackfill.length > 0
+                ? 'bg-amber-500 text-white hover:bg-amber-600'
+                : 'border border-primary text-primary hover:bg-primary hover:text-primary-foreground',
+            ].join(' ')}
           >
-            {isPending ? 'Scanning…' : 'Run Backfill'}
+            {isPending ? 'Updating…' : pendingBackfill.length > 0 ? `Fill ${pendingBackfill.length} records` : 'Run Backfill'}
           </button>
 
           {backfillResult && (

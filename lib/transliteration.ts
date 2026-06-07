@@ -59,15 +59,27 @@ export async function transliterateDirectoryBatch(
 Input: ${JSON.stringify(words)}
 Output: [{"e":"English","h":"Hindi","s":"Sindhi"}, ...]`
 
-  // max_tokens: ~20 tokens per word is generous for names
-  const maxTokens = Math.max(150, words.length * 20)
+  // Hindi/Sindhi scripts are ~3–4 chars per token; 40 tokens per word is safe
+  const maxTokens = Math.max(300, words.length * 40)
 
   const raw = await callAIRaw(prompt, credential, provider, maxTokens)
 
-  // Parse array response
+  // Robust parser: try full array first, fall back to extracting individual objects
+  let parsed: { e?: string; h?: string; s?: string }[] = []
   const arrMatch = raw.match(/\[[\s\S]*\]/)
-  if (!arrMatch) throw new Error('Could not parse batch AI response')
-  const parsed: { e?: string; h?: string; s?: string }[] = JSON.parse(arrMatch[0])
+  if (arrMatch) {
+    try {
+      parsed = JSON.parse(arrMatch[0])
+    } catch {
+      // Array may be truncated — extract individual objects instead
+      const objs = [...raw.matchAll(/\{[^{}]*\}/g)]
+      parsed = objs.map(m => { try { return JSON.parse(m[0]) } catch { return {} } })
+    }
+  } else {
+    // No array brackets — try extracting individual objects
+    const objs = [...raw.matchAll(/\{[^{}]*\}/g)]
+    parsed = objs.map(m => { try { return JSON.parse(m[0]) } catch { return {} } })
+  }
 
   return words.map((word, i) => ({
     word,
@@ -89,8 +101,10 @@ export async function transliterateSingleMinimal(
 "${word}"
 {"e":"English","h":"Hindi","s":"Sindhi"}`
 
-  const raw = await callAIRaw(prompt, credential, provider, 40)
-  const m = raw.match(/\{[^}]+\}/)
+  // 80 tokens: enough for {"e":"...","h":"...","s":"..."} even with long names
+  const raw = await callAIRaw(prompt, credential, provider, 80)
+  // Use [\s\S] to handle multiline responses; match outermost braces
+  const m = raw.match(/\{[\s\S]*?\}/)
   if (!m) throw new Error('Could not parse AI response')
   const r = JSON.parse(m[0])
   return {

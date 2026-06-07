@@ -71,13 +71,7 @@ export default function SubCasteManager({
       if (result.error) {
         setError(result.error)
       } else {
-        setShowForm(false)
-        setEditItem(null)
-        setNameValue('')
-        setSindhiName('')
-        setHindiName('')
-        setCasteIdValue('')
-        setConfidence(0)
+        window.location.reload()
       }
     })
   }
@@ -88,8 +82,10 @@ export default function SubCasteManager({
       const result = await deleteSubCaste(id)
       if (result.error) {
         setError(result.error)
+        setConfirmDel(null)
+      } else {
+        window.location.reload()
       }
-      setConfirmDel(null)
     })
   }
 
