@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { getTranslations } from 'next-intl/server'
 import {
   Home, Users, Layers, MapPin, TrendingUp,
   Upload, UserPlus, FileBarChart, CheckCircle2, Clock,
@@ -12,6 +13,8 @@ export default async function DashboardPage() {
 
   const { data: roleCheck } = await supabase.from('users').select('role').eq('id', user.id).single()
   if (roleCheck?.role === 'viewer') redirect('/tree')
+
+  const t = await getTranslations('dashboard')
 
   // Fetch real stats in parallel
   const [
@@ -63,8 +66,8 @@ export default async function DashboardPage() {
       {/* Page header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Overview of your community records.</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('welcome')}</p>
         </div>
         <div className="flex gap-2">
           <a

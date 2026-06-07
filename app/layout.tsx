@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter, Lora, Amiri } from 'next/font/google'
+import { NextIntlClientProvider } from 'next-intl'
+import { getLocale, getMessages } from 'next-intl/server'
 import './globals.css'
 
 const inter = Inter({
@@ -35,15 +37,25 @@ export const viewport = {
   maximumScale: 1,
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const locale = await getLocale()
+  const messages = await getMessages()
+  const isRTL = locale === 'sd'
+
   return (
-    <html lang="en" dir="ltr" className={`${inter.variable} ${lora.variable} ${amiri.variable} h-full antialiased`}>
+    <html
+      lang={locale}
+      dir={isRTL ? 'rtl' : 'ltr'}
+      className={`${inter.variable} ${lora.variable} ${amiri.variable} h-full antialiased`}
+    >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        {children}
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          {children}
+        </NextIntlClientProvider>
       </body>
     </html>
   )

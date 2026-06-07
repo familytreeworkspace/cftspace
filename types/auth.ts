@@ -22,7 +22,7 @@ export const PROTECTED_ROUTES: Record<string, UserRole[]> = {
   '/import': ['chief', 'admin'],
   '/reports': ['chief', 'admin', 'verifier'],
   '/users': ['chief', 'admin'],
-  '/dictionary': ['chief', 'admin'],
+  '/directory': ['chief', 'admin'],
   '/corrections': ['chief', 'admin'],
   '/subcaste': ['chief', 'admin'],
   '/settings': ['chief'],

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { autoInsertIntoDirectory } from '@/app/actions/directory'
 
 // ---- Household Actions ----
 
@@ -48,6 +49,10 @@ export async function createHousehold(formData: FormData) {
     khud_sc: subCasteId,
   })
 
+  // Auto-insert name(s) into Directory
+  const sindhiName = insertData.head_name_sindhi || insertData.head_name
+  if (sindhiName) await autoInsertIntoDirectory(sindhiName, 'name')
+
   revalidatePath('/households')
   redirect(`/households/${data.id}`)
 }
@@ -78,6 +83,10 @@ export async function updateHousehold(id: string, formData: FormData) {
     .eq('id', id)
 
   if (error) return { error: error.message }
+
+  // Auto-insert name(s) into Directory
+  const sindhiName = updateData.head_name_sindhi || updateData.head_name
+  if (sindhiName) await autoInsertIntoDirectory(sindhiName, 'name')
 
   revalidatePath(`/households/${id}`)
   revalidatePath('/households')
@@ -132,6 +141,10 @@ export async function createMember(formData: FormData) {
 
   if (error) return { error: error.message }
 
+  // Auto-insert member name into Directory
+  const sindhiName = insertData.name_sindhi || insertData.name
+  if (sindhiName) await autoInsertIntoDirectory(sindhiName, 'name')
+
   revalidatePath(`/households/${householdId}`)
   return { success: true }
 }
@@ -155,6 +168,10 @@ export async function updateMember(id: string, householdId: string, formData: Fo
   const { error } = await supabase.from('members').update(updateData).eq('id', id)
 
   if (error) return { error: error.message }
+
+  // Auto-insert member name into Directory
+  const sindhiName = updateData.name_sindhi || updateData.name
+  if (sindhiName) await autoInsertIntoDirectory(sindhiName, 'name')
 
   revalidatePath(`/households/${householdId}`)
   return { success: true }

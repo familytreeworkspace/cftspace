@@ -1,6 +1,14 @@
 'use client'
 
-import { getAgeCategory, getRelationLabel, type TreeMember } from '@/lib/tree-utils'
+import { useTranslations } from 'next-intl'
+import { getAgeCategory, type TreeMember } from '@/lib/tree-utils'
+
+// Sindhi relation code sets — same as tree-utils
+const WIFE_CODES     = new Set(['زال', 'zal', 'wife', 'w', 'spouse'])
+const SON_CODES      = new Set(['ٻت', 'bt', 'beta', 'son', 'بيٽو', 'بيٽا', 'ٻيٽو', 'ٻيٽا'])
+const DAUGHTER_CODES = new Set(['ڏي', 'di', 'beti', 'daughter', 'بيٽي', 'ڏيءَ'])
+const MOTHER_CODES   = new Set(['ماءُ', 'ماء', 'maa', 'mother', 'mom', 'ماءَ'])
+const FATHER_CODES   = new Set(['father', 'dad', 'abu', 'پيءُ', 'پيءَ', 'باپ', 'پيو', 'aabu'])
 
 interface TreeNodeProps {
   member: TreeMember
@@ -29,6 +37,7 @@ export default function TreeNodeComponent({
 }: TreeNodeProps) {
   const ageCategory = getAgeCategory(member.dob_year)
   const isFemale    = member.gender?.toLowerCase() === 'female'
+  const t           = useTranslations('relation')
 
   function handleDragStart(e: React.DragEvent) {
     e.dataTransfer.effectAllowed = 'move'
@@ -46,8 +55,20 @@ export default function TreeNodeComponent({
     onDrop?.(member.id)
   }
 
-  const memberWithHead = isHead ? { ...member, is_head: true } : member
-  const relationLabel  = getRelationLabel(memberWithHead)
+  // Translate relation label based on current locale
+  function getRelationLabelI18n(m: TreeMember & { is_head?: boolean }): string {
+    if (m.is_head || isHead) return t('head')
+    const code = (m.relation_code ?? '').trim()
+    const low  = code.toLowerCase()
+    if (WIFE_CODES.has(low)     || WIFE_CODES.has(code))     return t('wife')
+    if (SON_CODES.has(low)      || SON_CODES.has(code))      return t('son')
+    if (DAUGHTER_CODES.has(low) || DAUGHTER_CODES.has(code)) return t('daughter')
+    if (MOTHER_CODES.has(low)   || MOTHER_CODES.has(code))   return t('mother')
+    if (FATHER_CODES.has(low)   || FATHER_CODES.has(code))   return t('father')
+    return code || t('member')
+  }
+
+  const relationLabel = getRelationLabelI18n(isHead ? { ...member, is_head: true } : member)
 
   const nodeClasses = [
     'flex flex-col items-center gap-1 cursor-pointer select-none transition-all',

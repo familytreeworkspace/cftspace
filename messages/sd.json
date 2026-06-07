@@ -7,7 +7,7 @@
     "reports": "رپورٽون",
     "corrections": "سڌارا",
     "users": "يوزر",
-    "dictionary": "ڊڪشنري",
+    "directory": "ڊاريڪٽري",
     "subCaste": "نُڪ",
     "settings": "سيٽنگ"
   },
@@ -213,5 +213,14 @@
     "sd": "سنڌي",
     "hi": "हिंदी",
     "select": "ٻولي"
+  },
+  "relation": {
+    "head": "سر",
+    "wife": "زال",
+    "son": "ٻت",
+    "daughter": "ڏي",
+    "mother": "ماءُ",
+    "father": "پيءُ",
+    "member": "ڀاتي"
   }
 }

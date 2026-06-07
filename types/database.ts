@@ -38,27 +38,45 @@ export interface Database {
       households: {
         Row: {
           id: string; sub_caste_id: string | null; village_id: string | null
-          ghar_number: string; head_name: string; head_gender: 'Male' | 'Female'
+          ghar_number: string
+          head_name: string; head_name_sindhi: string | null; head_name_hindi: string | null
+          head_father_name: string | null
+          head_gender: 'Male' | 'Female'
           dob_year: number | null; dob_full: string | null
           education: string | null; profession: string | null
           original_address: string | null; current_address: string | null
+          orig_village_city: string | null; curr_village_city: string | null
+          orig_district: string | null; curr_district: string | null
+          orig_country: string | null; curr_country: string | null
           photo_url: string | null; is_active: boolean
           created_at: string; updated_at: string
         }
         Insert: {
           id?: string; sub_caste_id?: string | null; village_id?: string | null
-          ghar_number: string; head_name: string; head_gender?: 'Male' | 'Female'
+          ghar_number: string
+          head_name: string; head_name_sindhi?: string | null; head_name_hindi?: string | null
+          head_father_name?: string | null
+          head_gender?: 'Male' | 'Female'
           dob_year?: number | null; dob_full?: string | null
           education?: string | null; profession?: string | null
           original_address?: string | null; current_address?: string | null
+          orig_village_city?: string | null; curr_village_city?: string | null
+          orig_district?: string | null; curr_district?: string | null
+          orig_country?: string | null; curr_country?: string | null
           photo_url?: string | null; is_active?: boolean
         }
         Update: {
           id?: string; sub_caste_id?: string | null; village_id?: string | null
-          ghar_number?: string; head_name?: string; head_gender?: 'Male' | 'Female'
+          ghar_number?: string
+          head_name?: string; head_name_sindhi?: string | null; head_name_hindi?: string | null
+          head_father_name?: string | null
+          head_gender?: 'Male' | 'Female'
           dob_year?: number | null; dob_full?: string | null
           education?: string | null; profession?: string | null
           original_address?: string | null; current_address?: string | null
+          orig_village_city?: string | null; curr_village_city?: string | null
+          orig_district?: string | null; curr_district?: string | null
+          orig_country?: string | null; curr_country?: string | null
           photo_url?: string | null; is_active?: boolean
         }
         Relationships: []
@@ -66,7 +84,8 @@ export interface Database {
       members: {
         Row: {
           id: string; household_id: string; member_number: number | null
-          name: string; gender: 'Male' | 'Female'; relation_code: string
+          name: string; name_sindhi: string | null; name_hindi: string | null
+          gender: 'Male' | 'Female'; relation_code: string
           dob_year: number | null; dob_full: string | null
           education: string | null; profession: string | null
           sub_caste_id: string | null; photo_url: string | null
@@ -74,14 +93,16 @@ export interface Database {
         }
         Insert: {
           id?: string; household_id: string; member_number?: number | null
-          name: string; gender?: 'Male' | 'Female'; relation_code: string
+          name: string; name_sindhi?: string | null; name_hindi?: string | null
+          gender?: 'Male' | 'Female'; relation_code: string
           dob_year?: number | null; dob_full?: string | null
           education?: string | null; profession?: string | null
           sub_caste_id?: string | null; photo_url?: string | null
         }
         Update: {
           id?: string; household_id?: string; member_number?: number | null
-          name?: string; gender?: 'Male' | 'Female'; relation_code?: string
+          name?: string; name_sindhi?: string | null; name_hindi?: string | null
+          gender?: 'Male' | 'Female'; relation_code?: string
           dob_year?: number | null; dob_full?: string | null
           education?: string | null; profession?: string | null
           sub_caste_id?: string | null; photo_url?: string | null
@@ -144,6 +165,12 @@ export interface Database {
         Row:           { id: string; wrong_word: string; correct_word: string; language_from: string; language_to: string; added_by_type: 'manual' | 'ai'; confidence: number | null; is_verified: boolean; created_at: string }
         Insert:        { id?: string; wrong_word: string; correct_word: string; language_from?: string; language_to?: string; added_by_type?: 'manual' | 'ai'; confidence?: number | null; is_verified?: boolean }
         Update:        { id?: string; wrong_word?: string; correct_word?: string; language_from?: string; language_to?: string; added_by_type?: 'manual' | 'ai'; confidence?: number | null; is_verified?: boolean }
+        Relationships: []
+      }
+      directory: {
+        Row:    { id: string; sindhi_word: string; english_word: string | null; hindi_word: string | null; category: string; created_at: string; updated_at: string }
+        Insert: { id?: string; sindhi_word: string; english_word?: string | null; hindi_word?: string | null; category?: string; updated_at?: string }
+        Update: { id?: string; sindhi_word?: string; english_word?: string | null; hindi_word?: string | null; category?: string; updated_at?: string }
         Relationships: []
       }
       import_logs: {

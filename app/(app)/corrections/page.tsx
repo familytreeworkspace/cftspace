@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { getTranslations } from 'next-intl/server'
 import { getCorrections } from '@/app/actions/corrections'
 import CorrectionsClient from './_components/CorrectionsClient'
 
@@ -19,11 +20,12 @@ export default async function CorrectionsPage() {
   const canReview   = ['chief', 'admin'].includes(profile.role)
 
   const pendingCount = corrections.filter(c => c.status === 'pending').length
+  const t = await getTranslations('corrections')
 
   return (
     <div className="max-w-4xl">
       <div className="mb-5 flex items-center gap-3">
-        <h1 className="text-2xl font-bold text-foreground">Correction Requests</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
         {pendingCount > 0 && (
           <span className="px-2 py-0.5 text-xs bg-gold text-gold-foreground rounded-full font-semibold">
             {pendingCount} pending

@@ -7,7 +7,7 @@
     "reports": "रिपोर्ट",
     "corrections": "सुधार",
     "users": "उपयोगकर्ता",
-    "dictionary": "शब्दकोश",
+    "directory": "निर्देशिका",
     "subCaste": "उपजाति",
     "settings": "सेटिंग्स"
   },
@@ -213,5 +213,14 @@
     "sd": "سنڌي",
     "hi": "हिंदी",
     "select": "भाषा"
+  },
+  "relation": {
+    "head": "मुखिया",
+    "wife": "पत्नी",
+    "son": "बेटा",
+    "daughter": "बेटी",
+    "mother": "माँ",
+    "father": "पिता",
+    "member": "सदस्य"
   }
 }

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import {
   LayoutDashboard, Users, Network, Upload,
   FileBarChart, UserCog, BookOpen, Inbox,
@@ -10,32 +11,34 @@ import {
 import { cn } from '@/lib/utils'
 import { useState, useEffect } from 'react'
 
-const NAV_MAIN = [
-  { href: '/dashboard',  icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/households', icon: Users,            label: 'Households' },
-  { href: '/tree',       icon: Network,          label: 'Family Tree' },
-  { href: '/import',     icon: Upload,           label: 'Import Data' },
-  { href: '/reports',    icon: FileBarChart,     label: 'Reports' },
-]
-
-const NAV_ADMIN_CHIEF = [
-  { href: '/users',       icon: UserCog,  label: 'Users' },
-  { href: '/caste',       icon: Crown,    label: 'Caste' },
-  { href: '/subcaste',    icon: Layers,   label: 'Sub Caste' },
-  { href: '/dictionary',  icon: BookOpen, label: 'Dictionary' },
-  { href: '/corrections', icon: Inbox,    label: 'Corrections' },
-]
-
-const NAV_ADMIN_ONLY = [
-  { href: '/users',       icon: UserCog,  label: 'Users' },
-  { href: '/subcaste',    icon: Layers,   label: 'Sub Caste' },
-  { href: '/dictionary',  icon: BookOpen, label: 'Dictionary' },
-  { href: '/corrections', icon: Inbox,    label: 'Corrections' },
-]
-
 export default function AppSidebar({ userRole, autoCollapse }: { userRole?: string; autoCollapse?: boolean }) {
   const pathname  = usePathname()
+  const t         = useTranslations('nav')
   const [collapsed, setCollapsed] = useState(autoCollapse ?? false)
+
+  const NAV_MAIN = [
+    { href: '/dashboard',  icon: LayoutDashboard, label: t('dashboard') },
+    { href: '/households', icon: Users,            label: t('households') },
+    { href: '/tree',       icon: Network,          label: t('tree') },
+    { href: '/import',     icon: Upload,           label: t('import') },
+    { href: '/reports',    icon: FileBarChart,     label: t('reports') },
+  ]
+
+  const NAV_ADMIN_CHIEF = [
+    { href: '/users',       icon: UserCog,  label: t('users') },
+    { href: '/caste',       icon: Crown,    label: 'Caste' },
+    { href: '/subcaste',    icon: Layers,   label: t('subCaste') },
+    { href: '/directory',   icon: BookOpen, label: t('directory') },
+    { href: '/corrections', icon: Inbox,    label: t('corrections') },
+  ]
+
+  const NAV_ADMIN_ONLY = [
+    { href: '/users',       icon: UserCog,  label: t('users') },
+    { href: '/subcaste',    icon: Layers,   label: t('subCaste') },
+    { href: '/directory',   icon: BookOpen, label: t('directory') },
+    { href: '/corrections', icon: Inbox,    label: t('corrections') },
+  ]
+
   const NAV_ADMIN = userRole === 'chief' ? NAV_ADMIN_CHIEF : NAV_ADMIN_ONLY
 
   useEffect(() => {

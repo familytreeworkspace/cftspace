@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import type { ImportType } from '@/lib/import-column-maps'
+import { batchInsertIntoDirectory } from '@/app/actions/directory'
 
 // ---- Types ----
 export interface HouseholdRow {
@@ -13,11 +14,11 @@ export interface HouseholdRow {
   education?: string
   profession?: string
   original_address?: string
-  orig_taluka?: string
+  orig_village_city?: string
   orig_district?: string
   orig_country?: string
   current_address?: string
-  curr_taluka?: string
+  curr_village_city?: string
   curr_district?: string
   curr_country?: string
 }
@@ -98,11 +99,11 @@ export async function importHouseholds(
       education:        row.education?.trim() || null,
       profession:       row.profession?.trim() || null,
       original_address: row.original_address?.trim() || null,
-      orig_taluka:      row.orig_taluka?.trim() || null,
+      orig_village_city: row.orig_village_city?.trim() || null,
       orig_district:    row.orig_district?.trim() || null,
       orig_country:     row.orig_country?.trim() || null,
       current_address:  row.current_address?.trim() || null,
-      curr_taluka:      row.curr_taluka?.trim() || null,
+      curr_village_city: row.curr_village_city?.trim() || null,
       curr_district:    row.curr_district?.trim() || null,
       curr_country:     row.curr_country?.trim() || null,
     } as any, { onConflict: 'sub_caste_id,ghar_number' })
@@ -122,6 +123,10 @@ export async function importHouseholds(
       success_rows: result.success,
       warning_rows: result.warnings.length,
     })
+
+    // Auto-insert head names into Directory
+    const names = rows.map(r => r.head_name).filter(Boolean) as string[]
+    await batchInsertIntoDirectory(names, 'name')
   }
 
   return result
@@ -130,7 +135,8 @@ export async function importHouseholds(
 // ---- Import Members ----
 export async function importMembers(
   rows: MemberRow[],
-  subCasteId: string
+  subCasteId: string,
+  mode: 'fresh' | 'reimport' = 'fresh'
 ): Promise<ImportResult> {
   const supabase = await createClient()
   const result: ImportResult = { success: 0, warnings: [], errors: [] }
@@ -142,6 +148,12 @@ export async function importMembers(
     .eq('sub_caste_id', subCasteId)
 
   const gharMap = new Map(households?.map(h => [String(h.ghar_number).trim(), h.id]) ?? [])
+  const hhIds = households?.map(h => h.id) ?? []
+
+  // Re-import: delete existing members for this sub_caste then re-insert fresh
+  if (mode === 'reimport' && hhIds.length > 0) {
+    await supabase.from('members').delete().in('household_id', hhIds)
+  }
 
   for (const row of rows) {
     if (!row.ghar_number || !row.name) {
@@ -182,6 +194,10 @@ export async function importMembers(
       success_rows: result.success,
       warning_rows: result.warnings.length,
     })
+
+    // Auto-insert member names into Directory
+    const names = rows.map(r => r.name).filter(Boolean) as string[]
+    await batchInsertIntoDirectory(names, 'name')
   }
 
   return result
@@ -259,7 +275,8 @@ export async function importSashan(
 // ---- Import Telephone ----
 export async function importTelephone(
   rows: TelephoneRow[],
-  subCasteId: string
+  subCasteId: string,
+  mode: 'fresh' | 'reimport' = 'fresh'
 ): Promise<ImportResult> {
   const supabase = await createClient()
   const result: ImportResult = { success: 0, warnings: [], errors: [] }
@@ -270,6 +287,12 @@ export async function importTelephone(
     .eq('sub_caste_id', subCasteId)
 
   const gharMap = new Map(households?.map(h => [String(h.ghar_number).trim(), h.id]) ?? [])
+  const hhIds = households?.map(h => h.id) ?? []
+
+  // Re-import: delete existing contacts for this sub_caste then re-insert fresh
+  if (mode === 'reimport' && hhIds.length > 0) {
+    await supabase.from('contacts').delete().in('household_id', hhIds)
+  }
 
   for (const row of rows) {
     if (!row.ghar_number) continue
@@ -316,12 +339,13 @@ export async function importTelephone(
 export async function runImport(
   type: ImportType,
   rows: Record<string, string>[],
-  subCasteId: string
+  subCasteId: string,
+  mode: 'fresh' | 'reimport' = 'fresh'
 ): Promise<ImportResult> {
   switch (type) {
     case 'household': return importHouseholds(rows as unknown as HouseholdRow[], subCasteId)
-    case 'related':   return importMembers(rows as unknown as MemberRow[], subCasteId)
+    case 'related':   return importMembers(rows as unknown as MemberRow[], subCasteId, mode)
     case 'sashan':    return importSashan(rows as unknown as SashanRow[], subCasteId)
-    case 'telephone': return importTelephone(rows as unknown as TelephoneRow[], subCasteId)
+    case 'telephone': return importTelephone(rows as unknown as TelephoneRow[], subCasteId, mode)
   }
 }

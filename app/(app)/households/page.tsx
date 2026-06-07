@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { getTranslations } from 'next-intl/server'
 import HouseholdListClient from './_components/HouseholdListClient'
 
 export default async function HouseholdsPage() {
@@ -56,11 +57,12 @@ export default async function HouseholdsPage() {
   }))
 
   const canAdd = ['chief', 'admin', 'verifier'].includes(profile.role)
+  const t = await getTranslations('household')
 
   return (
     <div>
       <div className="mb-5 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Households</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
       </div>
       <HouseholdListClient
         households={householdsWithCount}

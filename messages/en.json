@@ -7,7 +7,7 @@
     "reports": "Reports",
     "corrections": "Corrections",
     "users": "Users",
-    "dictionary": "Dictionary",
+    "directory": "Directory",
     "subCaste": "Sub Caste",
     "settings": "Settings"
   },
@@ -213,5 +213,14 @@
     "sd": "سنڌي",
     "hi": "हिंदी",
     "select": "Language"
+  },
+  "relation": {
+    "head": "Head",
+    "wife": "Wife",
+    "son": "Son",
+    "daughter": "Daughter",
+    "mother": "Mother",
+    "father": "Father",
+    "member": "Member"
   }
 }

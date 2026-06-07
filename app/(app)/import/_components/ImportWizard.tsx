@@ -15,11 +15,12 @@ interface SubCaste { id: string; name: string }
 
 type WizardStep =
   | 'select-subcaste'
+  | 'reimport-select'
   | 'upload'
   | 'map-columns'
   | 'preview'
   | 'importing'
-  | 'prompt-next'
+  | 'result'
   | 'summary'
 
 interface WizardState {
@@ -32,6 +33,7 @@ interface WizardState {
   columnMapping: Record<string, string>
   completedTypes: ImportType[]
   results: Partial<Record<ImportType, ImportResult>>
+  isReimport: boolean
 }
 
 // Template file names (must match files in /public/templates/)
@@ -44,7 +46,6 @@ const TEMPLATE_FILES: Record<ImportType, string> = {
 
 // ---- CSV Parser ----
 function parseCSV(text: string): Record<string, string>[] {
-  // Strip UTF-8 BOM if present (added by Excel when saving CSV UTF-8)
   const cleaned = text.replace(/^﻿/, '')
   const lines = cleaned.split('\n').map(l => l.trim()).filter(Boolean)
   if (lines.length < 2) return []
@@ -68,7 +69,6 @@ function parseCSV(text: string): Record<string, string>[] {
     return result
   }
 
-  // Strip BOM from each header (Excel sometimes attaches BOM to column names)
   const headers = splitLine(lines[0]).map(h => h.replace(/^﻿/, '').trim())
   return lines.slice(1).map(line => {
     const values = splitLine(line)
@@ -78,8 +78,22 @@ function parseCSV(text: string): Record<string, string>[] {
   })
 }
 
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  } catch {
+    return iso
+  }
+}
+
 // ---- Component ----
-export default function ImportWizard({ subCastes }: { subCastes: SubCaste[] }) {
+export default function ImportWizard({
+  subCastes,
+  importStatus,
+}: {
+  subCastes: SubCaste[]
+  importStatus: Record<string, Record<string, string>>
+}) {
   const [state, setState] = useState<WizardState>({
     step: 'select-subcaste',
     subCasteId: '',
@@ -90,13 +104,52 @@ export default function ImportWizard({ subCastes }: { subCastes: SubCaste[] }) {
     columnMapping: {},
     completedTypes: [],
     results: {},
+    isReimport: false,
   })
   const [fileError, setFileError] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
 
   // ---- Step: Select Sub Caste ----
   function handleSubCasteSelect(id: string, name: string) {
-    setState(s => ({ ...s, subCasteId: id, subCasteName: name, step: 'upload', importType: 'household' }))
+    const previousImports = importStatus[id] ?? {}
+    const hasExistingData = Object.keys(previousImports).length > 0
+
+    if (hasExistingData) {
+      // Sub caste already imported — go to reimport selection
+      setState(s => ({
+        ...s,
+        subCasteId: id,
+        subCasteName: name,
+        step: 'reimport-select',
+        isReimport: true,
+        completedTypes: [],
+        results: {},
+      }))
+    } else {
+      // Fresh import — normal sequential flow
+      setState(s => ({
+        ...s,
+        subCasteId: id,
+        subCasteName: name,
+        step: 'upload',
+        importType: 'household',
+        isReimport: false,
+        completedTypes: [],
+        results: {},
+      }))
+    }
+  }
+
+  // ---- Step: Select which reimport step ----
+  function handleReimportStepSelect(type: ImportType) {
+    setState(s => ({
+      ...s,
+      importType: type,
+      rawHeaders: [],
+      rawRows: [],
+      columnMapping: {},
+      step: 'upload',
+    }))
   }
 
   // ---- Step: Parse CSV File ----
@@ -116,7 +169,7 @@ export default function ImportWizard({ subCastes }: { subCastes: SubCaste[] }) {
           return
         }
         const headers = Object.keys(rows[0])
-        const mapping = autoDetectMapping(headers)
+        const mapping = autoDetectMapping(headers, state.importType)
         setState(s => ({
           ...s,
           rawHeaders: headers,
@@ -129,7 +182,7 @@ export default function ImportWizard({ subCastes }: { subCastes: SubCaste[] }) {
       }
     }
     reader.readAsText(file, 'UTF-8')
-  }, [])
+  }, [state.importType])
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
@@ -160,7 +213,6 @@ export default function ImportWizard({ subCastes }: { subCastes: SubCaste[] }) {
   async function handleImport() {
     setState(s => ({ ...s, step: 'importing' }))
 
-    // Apply column mapping
     const mappedRows = state.rawRows.map(row => {
       const mapped: Record<string, string> = {}
       for (const [header, fieldKey] of Object.entries(state.columnMapping)) {
@@ -169,32 +221,47 @@ export default function ImportWizard({ subCastes }: { subCastes: SubCaste[] }) {
       return mapped
     })
 
-    const result = await runImport(state.importType, mappedRows, state.subCasteId)
+    const mode = state.isReimport ? 'reimport' : 'fresh'
+    const result = await runImport(state.importType, mappedRows, state.subCasteId, mode)
 
     setState(s => ({
       ...s,
       completedTypes: [...s.completedTypes, s.importType],
       results: { ...s.results, [s.importType]: result },
-      step: 'prompt-next',
+      step: 'result',
     }))
   }
 
-  // ---- Step: Prompt Next ----
-  function handleNextImport(proceed: boolean) {
-    const remaining = IMPORT_SEQUENCE.filter(t => !state.completedTypes.includes(t))
-    if (!proceed || remaining.length === 0) {
-      setState(s => ({ ...s, step: 'summary' }))
+  // ---- After result: fresh mode → prompt next; reimport mode → back to select ----
+  function handleAfterResult(action: 'next' | 'another' | 'finish') {
+    if (state.isReimport) {
+      if (action === 'another') {
+        setState(s => ({ ...s, step: 'reimport-select', rawHeaders: [], rawRows: [], columnMapping: {} }))
+      } else {
+        setState(s => ({ ...s, step: 'summary' }))
+      }
       return
     }
-    const nextType = remaining[0]
-    setState(s => ({
-      ...s,
-      importType: nextType,
-      rawHeaders: [],
-      rawRows: [],
-      columnMapping: {},
-      step: 'upload',
-    }))
+
+    // Fresh mode — sequential
+    if (action === 'next') {
+      const remaining = IMPORT_SEQUENCE.filter(t => !state.completedTypes.includes(t))
+      if (remaining.length === 0) {
+        setState(s => ({ ...s, step: 'summary' }))
+        return
+      }
+      const nextType = remaining[0]
+      setState(s => ({
+        ...s,
+        importType: nextType,
+        rawHeaders: [],
+        rawRows: [],
+        columnMapping: {},
+        step: 'upload',
+      }))
+    } else {
+      setState(s => ({ ...s, step: 'summary' }))
+    }
   }
 
   function handleReset() {
@@ -208,11 +275,12 @@ export default function ImportWizard({ subCastes }: { subCastes: SubCaste[] }) {
       columnMapping: {},
       completedTypes: [],
       results: {},
+      isReimport: false,
     })
   }
 
   // ---- Render ----
-  const ALL_STEPS = [
+  const FRESH_STEPS = [
     { key: 'select-subcaste', label: 'Sub Caste' },
     { key: 'household',       label: 'Household' },
     { key: 'related',         label: 'Members'   },
@@ -227,29 +295,29 @@ export default function ImportWizard({ subCastes }: { subCastes: SubCaste[] }) {
     return 'pending'
   }
 
+  const showFreshIndicator = !state.isReimport && state.step !== 'summary'
+  const showReimportIndicator = state.isReimport && state.step !== 'summary' && state.step !== 'select-subcaste'
+
   return (
     <div className="max-w-3xl mx-auto">
-      {/* Professional Step Indicator */}
-      {state.step !== 'summary' && (
+      {/* Fresh import step indicator */}
+      {showFreshIndicator && (
         <div className="mb-8 px-2">
           <div className="flex items-start">
-            {ALL_STEPS.map((s, i) => {
+            {FRESH_STEPS.map((s, i) => {
               const status = getStepStatus(s.key)
               return (
                 <div key={s.key} className="flex-1 flex flex-col items-center relative">
-                  {/* Connecting line — left half */}
                   {i > 0 && (
                     <div className={`absolute left-0 right-1/2 top-4 h-0.5 -translate-y-1/2 transition-colors ${
-                      getStepStatus(ALL_STEPS[i - 1].key) === 'done' ? 'bg-primary' : 'bg-border'
+                      getStepStatus(FRESH_STEPS[i - 1].key) === 'done' ? 'bg-primary' : 'bg-border'
                     }`} />
                   )}
-                  {/* Connecting line — right half */}
-                  {i < ALL_STEPS.length - 1 && (
+                  {i < FRESH_STEPS.length - 1 && (
                     <div className={`absolute left-1/2 right-0 top-4 h-0.5 -translate-y-1/2 transition-colors ${
                       status === 'done' ? 'bg-primary' : 'bg-border'
                     }`} />
                   )}
-                  {/* Circle */}
                   <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all ${
                     status === 'done'   ? 'bg-primary border-primary text-primary-foreground' :
                     status === 'active' ? 'bg-primary border-primary text-primary-foreground ring-4 ring-primary/20' :
@@ -257,7 +325,6 @@ export default function ImportWizard({ subCastes }: { subCastes: SubCaste[] }) {
                   }`}>
                     {status === 'done' ? '✓' : i + 1}
                   </div>
-                  {/* Label */}
                   <span className={`mt-2 text-xs text-center font-medium leading-tight transition-colors ${
                     status === 'active' ? 'text-primary' :
                     status === 'done'   ? 'text-foreground' :
@@ -272,20 +339,58 @@ export default function ImportWizard({ subCastes }: { subCastes: SubCaste[] }) {
         </div>
       )}
 
+      {/* Reimport step indicator */}
+      {showReimportIndicator && (
+        <div className="mb-6 flex items-center gap-2 px-1">
+          <span className="text-xs text-muted-foreground font-medium">Re-importing:</span>
+          {IMPORT_SEQUENCE.map(type => {
+            const isDone = state.completedTypes.includes(type)
+            const isActive = type === state.importType && state.step !== 'reimport-select'
+            return (
+              <span key={type} className={`px-2 py-0.5 rounded text-xs font-medium border ${
+                isDone   ? 'bg-primary/10 border-primary/30 text-primary' :
+                isActive ? 'bg-primary border-primary text-primary-foreground' :
+                           'bg-background border-border text-muted-foreground'
+              }`}>
+                {isDone ? '✓ ' : ''}{IMPORT_TYPE_LABELS[type].split(' ')[0]}
+              </span>
+            )
+          })}
+        </div>
+      )}
+
       {/* Steps */}
       {state.step === 'select-subcaste' && (
-        <SubCasteStep subCastes={subCastes} onSelect={handleSubCasteSelect} />
+        <SubCasteStep subCastes={subCastes} importStatus={importStatus} onSelect={handleSubCasteSelect} />
+      )}
+
+      {state.step === 'reimport-select' && (
+        <ReimportSelectStep
+          subCasteName={state.subCasteName}
+          importStatus={importStatus[state.subCasteId] ?? {}}
+          completedThisSession={state.completedTypes}
+          onSelect={handleReimportStepSelect}
+          onBack={handleReset}
+        />
       )}
 
       {state.step === 'upload' && (
         <UploadStep
           importType={state.importType}
+          isReimport={state.isReimport}
           isDragging={isDragging}
           fileError={fileError}
           onDrop={handleDrop}
           onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
           onDragLeave={() => setIsDragging(false)}
           onFileInput={handleFileInput}
+          onBack={() => {
+            if (state.isReimport) {
+              setState(s => ({ ...s, step: 'reimport-select', rawHeaders: [], rawRows: [], columnMapping: {} }))
+            } else {
+              setState(s => ({ ...s, step: 'select-subcaste' }))
+            }
+          }}
         />
       )}
 
@@ -304,6 +409,7 @@ export default function ImportWizard({ subCastes }: { subCastes: SubCaste[] }) {
       {state.step === 'preview' && (
         <PreviewStep
           importType={state.importType}
+          isReimport={state.isReimport}
           headers={state.rawHeaders}
           mapping={state.columnMapping}
           rows={state.rawRows.slice(0, 10)}
@@ -316,16 +422,19 @@ export default function ImportWizard({ subCastes }: { subCastes: SubCaste[] }) {
       {state.step === 'importing' && (
         <div className="bg-card rounded-xl border border-border p-10 text-center">
           <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-          <p className="text-muted-foreground">Importing {IMPORT_TYPE_LABELS[state.importType]}...</p>
+          <p className="text-muted-foreground">
+            {state.isReimport ? 'Re-importing' : 'Importing'} {IMPORT_TYPE_LABELS[state.importType]}...
+          </p>
         </div>
       )}
 
-      {state.step === 'prompt-next' && (
-        <PromptNextStep
+      {state.step === 'result' && (
+        <ResultStep
           justCompleted={state.importType}
           result={state.results[state.importType]!}
           completedTypes={state.completedTypes}
-          onNext={handleNextImport}
+          isReimport={state.isReimport}
+          onAction={handleAfterResult}
         />
       )}
 
@@ -333,6 +442,7 @@ export default function ImportWizard({ subCastes }: { subCastes: SubCaste[] }) {
         <SummaryStep
           subCasteName={state.subCasteName}
           results={state.results}
+          isReimport={state.isReimport}
           onReset={handleReset}
         />
       )}
@@ -346,9 +456,11 @@ export default function ImportWizard({ subCastes }: { subCastes: SubCaste[] }) {
 
 function SubCasteStep({
   subCastes,
+  importStatus,
   onSelect,
 }: {
   subCastes: SubCaste[]
+  importStatus: Record<string, Record<string, string>>
   onSelect: (id: string, name: string) => void
 }) {
   return (
@@ -382,15 +494,32 @@ function SubCasteStep({
         <h2 className="text-lg font-semibold text-foreground mb-1">Select Sub Caste</h2>
         <p className="text-sm text-muted-foreground mb-6">All imported data will be linked to this sub caste.</p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {subCastes.map(sc => (
-            <button
-              key={sc.id}
-              onClick={() => onSelect(sc.id, sc.name)}
-              className="border border-border rounded-lg p-4 text-left hover:border-primary hover:bg-primary/5 transition-colors group"
-            >
-              <div className="font-medium text-foreground group-hover:text-primary">{sc.name}</div>
-            </button>
-          ))}
+          {subCastes.map(sc => {
+            const scStatus = importStatus[sc.id] ?? {}
+            const importedTypes = IMPORT_SEQUENCE.filter(t => scStatus[t])
+            const hasData = importedTypes.length > 0
+            return (
+              <button
+                key={sc.id}
+                onClick={() => onSelect(sc.id, sc.name)}
+                className="border border-border rounded-lg p-4 text-left hover:border-primary hover:bg-primary/5 transition-colors group"
+              >
+                <div className="font-medium text-foreground group-hover:text-primary">{sc.name}</div>
+                {hasData ? (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {importedTypes.map(t => (
+                      <span key={t} className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium">
+                        {IMPORT_TYPE_LABELS[t].split(' ')[0]}
+                      </span>
+                    ))}
+                    <span className="text-[10px] text-muted-foreground mt-0.5 w-full">Click to re-import</span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground mt-1">No data yet</div>
+                )}
+              </button>
+            )
+          })}
         </div>
         {subCastes.length === 0 && (
           <p className="text-sm text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg">
@@ -402,17 +531,119 @@ function SubCasteStep({
   )
 }
 
+function ReimportSelectStep({
+  subCasteName,
+  importStatus,
+  completedThisSession,
+  onSelect,
+  onBack,
+}: {
+  subCasteName: string
+  importStatus: Record<string, string>
+  completedThisSession: ImportType[]
+  onSelect: (type: ImportType) => void
+  onBack: () => void
+}) {
+  const STEP_ICONS: Record<ImportType, string> = {
+    household: '🏠',
+    related:   '👥',
+    sashan:    '🔗',
+    telephone: '📞',
+  }
+
+  const STEP_DESC: Record<ImportType, string> = {
+    household: 'Head of household records',
+    related:   'Members (wife, sons, daughters…)',
+    sashan:    'Sub caste relation table',
+    telephone: 'Contact numbers',
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-5 py-4">
+        <div className="flex items-start gap-3">
+          <span className="text-amber-500 text-lg">⚠</span>
+          <div>
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+              {subCasteName} — data already imported
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+              Select the step you want to re-import. Only that sheet will be updated — other steps remain unchanged.
+              For Members and Contacts, existing records will be replaced with the new file.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-card rounded-xl border border-border p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-1">Which step to re-import?</h2>
+        <p className="text-sm text-muted-foreground mb-5">
+          Click any step below. You can do multiple steps one by one.
+        </p>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {IMPORT_SEQUENCE.map(type => {
+            const lastImport = importStatus[type]
+            const doneThisSession = completedThisSession.includes(type)
+            return (
+              <button
+                key={type}
+                onClick={() => onSelect(type)}
+                className="flex items-start gap-4 p-4 border border-border rounded-lg hover:border-primary hover:bg-primary/5 transition-colors text-left group"
+              >
+                <span className="text-2xl mt-0.5">{STEP_ICONS[type]}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-foreground group-hover:text-primary text-sm">
+                      {IMPORT_TYPE_LABELS[type].split(' ')[0]}
+                    </span>
+                    {doneThisSession && (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded font-medium">
+                        ✓ Done
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{STEP_DESC[type]}</p>
+                  {lastImport ? (
+                    <p className="text-[10px] text-muted-foreground/70 mt-1">
+                      Last imported: {formatDate(lastImport)}
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground/50 mt-1">Not imported yet</p>
+                  )}
+                </div>
+                <span className="text-muted-foreground group-hover:text-primary text-sm self-center">→</span>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-border">
+          <button
+            onClick={onBack}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            ← Choose a different sub caste
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function UploadStep({
-  importType, isDragging, fileError,
-  onDrop, onDragOver, onDragLeave, onFileInput,
+  importType, isReimport, isDragging, fileError,
+  onDrop, onDragOver, onDragLeave, onFileInput, onBack,
 }: {
   importType: ImportType
+  isReimport: boolean
   isDragging: boolean
   fileError: string | null
   onDrop: (e: React.DragEvent) => void
   onDragOver: (e: React.DragEvent) => void
   onDragLeave: () => void
   onFileInput: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onBack: () => void
 }) {
   const templateFile = TEMPLATE_FILES[importType]
 
@@ -421,7 +652,7 @@ function UploadStep({
       <div className="flex items-start justify-between mb-4">
         <div>
           <h2 className="text-lg font-semibold text-foreground">
-            Upload — {IMPORT_TYPE_LABELS[importType]}
+            {isReimport ? 'Re-import' : 'Upload'} — {IMPORT_TYPE_LABELS[importType]}
           </h2>
           <p className="text-sm text-muted-foreground mt-0.5">
             Upload the CSV file for this sheet. Column headers can be in Sindhi or English.
@@ -455,6 +686,15 @@ function UploadStep({
           {fileError}
         </div>
       )}
+
+      <div className="mt-4">
+        <button
+          onClick={onBack}
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          ← Back
+        </button>
+      </div>
     </div>
   )
 }
@@ -546,9 +786,10 @@ function ColumnMapStep({
 }
 
 function PreviewStep({
-  importType, headers, mapping, rows, totalRows, onConfirm, onBack,
+  importType, isReimport, headers, mapping, rows, totalRows, onConfirm, onBack,
 }: {
   importType: ImportType
+  isReimport: boolean
   headers: string[]
   mapping: Record<string, string>
   rows: Record<string, string>[]
@@ -562,9 +803,14 @@ function PreviewStep({
   return (
     <div className="bg-card rounded-xl border border-border p-6">
       <h2 className="text-lg font-semibold text-foreground mb-1">Preview Data</h2>
-      <p className="text-sm text-muted-foreground mb-5">
-        Showing first {rows.length} of {totalRows} rows. Confirm to import all {totalRows} records.
+      <p className="text-sm text-muted-foreground mb-1">
+        Showing first {rows.length} of {totalRows} rows.
       </p>
+      {isReimport && (importType === 'related' || importType === 'telephone') && (
+        <div className="mb-4 text-xs bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2 text-amber-700 dark:text-amber-400">
+          Re-import: existing {importType === 'related' ? 'members' : 'contacts'} for this sub caste will be replaced with these {totalRows} records.
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-lg border border-border mb-6">
         <table className="text-xs w-full">
@@ -605,20 +851,21 @@ function PreviewStep({
           onClick={onConfirm}
           className="px-5 py-2 text-sm font-semibold heritage-gradient text-primary-foreground rounded-lg hover:opacity-90"
         >
-          Import {totalRows} Records
+          {isReimport ? 'Re-import' : 'Import'} {totalRows} Records
         </button>
       </div>
     </div>
   )
 }
 
-function PromptNextStep({
-  justCompleted, result, completedTypes, onNext,
+function ResultStep({
+  justCompleted, result, completedTypes, isReimport, onAction,
 }: {
   justCompleted: ImportType
   result: ImportResult
   completedTypes: ImportType[]
-  onNext: (proceed: boolean) => void
+  isReimport: boolean
+  onAction: (action: 'next' | 'another' | 'finish') => void
 }) {
   const remaining = IMPORT_SEQUENCE.filter(t => !completedTypes.includes(t))
   const nextType = remaining[0]
@@ -629,16 +876,16 @@ function PromptNextStep({
       <div className={`rounded-lg p-4 mb-6 ${
         result.errors.length > 0
           ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
-          : 'bg-success/10 border border-success/30'
+          : 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
       }`}>
         <div className="flex items-center gap-2 mb-2">
           <span className="text-lg">{result.errors.length > 0 ? '⚠' : '✓'}</span>
           <span className="font-semibold text-foreground">
-            {IMPORT_TYPE_LABELS[justCompleted]} — Import Complete
+            {IMPORT_TYPE_LABELS[justCompleted]} — {isReimport ? 'Re-import' : 'Import'} Complete
           </span>
         </div>
         <div className="text-sm text-foreground/80 space-y-1">
-          <div>✓ {result.success} records imported successfully</div>
+          <div>✓ {result.success} records {isReimport ? 're-imported' : 'imported'} successfully</div>
           {result.warnings.length > 0 && (
             <div className="text-yellow-600 dark:text-yellow-400">⚠ {result.warnings.length} warnings</div>
           )}
@@ -664,8 +911,29 @@ function PromptNextStep({
         )}
       </div>
 
-      {/* Next step prompt */}
-      {nextType ? (
+      {/* Next action */}
+      {isReimport ? (
+        <>
+          <h2 className="text-lg font-semibold text-foreground mb-1">Re-import another step?</h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            Go back to select another step, or finish and view the summary.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => onAction('another')}
+              className="px-5 py-2 text-sm font-semibold heritage-gradient text-primary-foreground rounded-lg hover:opacity-90"
+            >
+              ← Re-import another step
+            </button>
+            <button
+              onClick={() => onAction('finish')}
+              className="px-4 py-2 text-sm text-foreground border border-border rounded-lg hover:bg-accent"
+            >
+              Finish
+            </button>
+          </div>
+        </>
+      ) : nextType ? (
         <>
           <h2 className="text-lg font-semibold text-foreground mb-1">
             Import {IMPORT_TYPE_LABELS[nextType]} now?
@@ -675,13 +943,13 @@ function PromptNextStep({
           </p>
           <div className="flex gap-3">
             <button
-              onClick={() => onNext(true)}
+              onClick={() => onAction('next')}
               className="px-5 py-2 text-sm font-semibold heritage-gradient text-primary-foreground rounded-lg hover:opacity-90"
             >
               Yes, import {IMPORT_TYPE_LABELS[nextType]} →
             </button>
             <button
-              onClick={() => onNext(false)}
+              onClick={() => onAction('finish')}
               className="px-4 py-2 text-sm text-foreground border border-border rounded-lg hover:bg-accent"
             >
               Skip & Finish
@@ -692,7 +960,7 @@ function PromptNextStep({
         <>
           <h2 className="text-lg font-semibold text-foreground mb-4">All files imported!</h2>
           <button
-            onClick={() => onNext(false)}
+            onClick={() => onAction('finish')}
             className="px-5 py-2 text-sm font-semibold heritage-gradient text-primary-foreground rounded-lg hover:opacity-90"
           >
             View Summary →
@@ -704,10 +972,11 @@ function PromptNextStep({
 }
 
 function SummaryStep({
-  subCasteName, results, onReset,
+  subCasteName, results, isReimport, onReset,
 }: {
   subCasteName: string
   results: Partial<Record<ImportType, ImportResult>>
+  isReimport: boolean
   onReset: () => void
 }) {
   const totalSuccess = Object.values(results).reduce((sum, r) => sum + (r?.success ?? 0), 0)
@@ -717,7 +986,9 @@ function SummaryStep({
     <div className="bg-card rounded-xl border border-border p-8">
       <div className="text-center mb-8">
         <div className="text-4xl mb-3">✓</div>
-        <h2 className="text-xl font-bold text-foreground">Import Complete</h2>
+        <h2 className="text-xl font-bold text-foreground">
+          {isReimport ? 'Re-import' : 'Import'} Complete
+        </h2>
         <p className="text-muted-foreground mt-1">Sub Caste: {subCasteName}</p>
       </div>
 
@@ -734,7 +1005,7 @@ function SummaryStep({
             <div key={type} className="flex items-center justify-between py-3">
               <span className="text-sm font-medium text-foreground">{IMPORT_TYPE_LABELS[type]}</span>
               <div className="flex items-center gap-3 text-sm">
-                <span className="text-success font-semibold">{r.success} imported</span>
+                <span className="text-green-600 dark:text-green-400 font-semibold">{r.success} {isReimport ? 're-imported' : 'imported'}</span>
                 {r.warnings.length > 0 && <span className="text-yellow-500">{r.warnings.length} warnings</span>}
                 {r.errors.length > 0 && <span className="text-destructive">{r.errors.length} errors</span>}
               </div>
@@ -744,7 +1015,7 @@ function SummaryStep({
       </div>
 
       <div className="bg-primary/10 rounded-lg px-4 py-3 mb-6 flex items-center justify-between">
-        <span className="text-sm font-medium text-foreground">Total records imported</span>
+        <span className="text-sm font-medium text-foreground">Total records</span>
         <span className="text-2xl font-bold text-primary">{totalSuccess}</span>
       </div>
 
@@ -765,7 +1036,7 @@ function SummaryStep({
           onClick={onReset}
           className="px-4 py-2 text-sm text-foreground border border-border rounded-lg hover:bg-accent"
         >
-          Import Another Sub Caste
+          {isReimport ? 'Re-import another sub caste' : 'Import another sub caste'}
         </button>
       </div>
     </div>

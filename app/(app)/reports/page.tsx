@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { getTranslations } from 'next-intl/server'
 import ReportsClient from './_components/ReportsClient'
 
 export default async function ReportsPage() {
@@ -22,10 +23,12 @@ export default async function ReportsPage() {
   const { data: villages } = await supabase
     .from('villages').select('id, name').order('name')
 
+  const t = await getTranslations('reports')
+
   return (
     <div className="space-y-6">
       <div className="no-print">
-        <h1 className="text-2xl font-bold text-foreground">Reports</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
         <p className="text-sm text-muted-foreground mt-1">Generate & export community insights.</p>
       </div>
       <ReportsClient subCastes={subCastes ?? []} villages={villages ?? []} />

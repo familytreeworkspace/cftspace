@@ -19,11 +19,11 @@ export const HOUSEHOLD_FIELDS: FieldDef[] = [
   { key: 'education',        label: 'Education',           sindhi: 'تعليم',            required: false },
   { key: 'profession',       label: 'Profession',          sindhi: 'ڪاروبار',          required: false },
   { key: 'original_address', label: 'Original Address',    sindhi: 'اصل پتو',         required: false },
-  { key: 'orig_taluka',      label: 'Original Taluka',     sindhi: 'اصل تعلقو',    required: false },
+  { key: 'orig_village_city',     label: 'Original Village / City', sindhi: 'اصل ڳوٺ/شهر', required: false },
   { key: 'orig_district',    label: 'Original District',   sindhi: 'اصل ضلعو',     required: false },
   { key: 'orig_country',     label: 'Original Country',    sindhi: 'اصل ملڪ',      required: false },
   { key: 'current_address',  label: 'Current Address',     sindhi: 'موجوده پتو',   required: false },
-  { key: 'curr_taluka',      label: 'Current Taluka',      sindhi: 'موجوده تعلقو', required: false },
+  { key: 'curr_village_city',     label: 'Current Village / City',  sindhi: 'موجوده ڳوٺ/شهر', required: false },
   { key: 'curr_district',    label: 'Current District',    sindhi: 'موجوده ضلعو',  required: false },
   { key: 'curr_country',     label: 'Current Country',     sindhi: 'موجوده ملڪ',   required: false },
 ]
@@ -32,8 +32,8 @@ export const RELATED_FIELDS: FieldDef[] = [
   { key: 'ghar_number',   label: 'Ghar Number',    sindhi: 'گهر نمبر',       required: true  },
   { key: 'member_number', label: 'Member Number',  sindhi: 'ڀاتي نمبر',      required: false },
   { key: 'name',          label: 'Name',           sindhi: 'پاتي جو نالو',   required: true  },
-  { key: 'relation_code', label: 'Relation Code',  sindhi: 'رشتو',           required: true  },
   { key: 'gender',        label: 'Gender',         sindhi: 'صنف',             required: false },
+  { key: 'relation_code', label: 'Relation Code',  sindhi: 'رشتو',           required: true  },
   { key: 'dob_year',      label: 'Birth Year',     sindhi: 'جنم جي تاريخ',  required: false },
   { key: 'education',     label: 'Education',      sindhi: 'تعليم',           required: false },
   { key: 'profession',    label: 'Profession',     sindhi: 'ڪاروبار',         required: false },
@@ -73,11 +73,11 @@ const HEADER_ALIASES: Record<string, string> = {
   'تعليم': 'education', 'education': 'education',
   'ڪاروبار': 'profession', 'profession': 'profession', 'business': 'profession',
   'اصل پتو': 'original_address', 'original address': 'original_address', 'original_address': 'original_address',
-  'orig_taluka': 'orig_taluka', 'original taluka': 'orig_taluka', 'orig taluka': 'orig_taluka', 'اصل تعلقو': 'orig_taluka',
+  'orig_village_city': 'orig_village_city', 'original village': 'orig_village_city', 'orig village': 'orig_village_city', 'original village/city': 'orig_village_city', 'village': 'orig_village_city', 'orig_taluka': 'orig_village_city', 'original taluka': 'orig_village_city', 'اصل تعلقو': 'orig_village_city', 'اصل ڳوٺ/شهر': 'orig_village_city',
   'orig_district': 'orig_district', 'original district': 'orig_district', 'orig district': 'orig_district', 'اصل ضلعو': 'orig_district',
   'orig_country': 'orig_country', 'original country': 'orig_country', 'orig country': 'orig_country', 'اصل ملڪ': 'orig_country',
   'موجوده پتو': 'current_address', 'current address': 'current_address', 'current_address': 'current_address',
-  'curr_taluka': 'curr_taluka', 'current taluka': 'curr_taluka', 'curr taluka': 'curr_taluka', 'موجوده تعلقو': 'curr_taluka',
+  'curr_village_city': 'curr_village_city', 'current village': 'curr_village_city', 'curr village': 'curr_village_city', 'current village/city': 'curr_village_city', 'curr_taluka': 'curr_village_city', 'current taluka': 'curr_village_city', 'موجوده تعلقو': 'curr_village_city', 'موجوده ڳوٺ/شهر': 'curr_village_city',
   'curr_district': 'curr_district', 'current district': 'curr_district', 'curr district': 'curr_district', 'موجوده ضلعو': 'curr_district',
   'curr_country': 'curr_country', 'current country': 'curr_country', 'curr country': 'curr_country', 'موجوده ملڪ': 'curr_country',
   'صنف': 'head_gender', 'gender': 'head_gender', 'head_gender': 'head_gender',
@@ -101,11 +101,13 @@ const HEADER_ALIASES: Record<string, string> = {
   'number_3': 'number_3', 'number 3': 'number_3', 'phone 3': 'number_3', 'tel 3': 'number_3',
 }
 
-export function autoDetectMapping(headers: string[]): Record<string, string> {
+export function autoDetectMapping(headers: string[], importType?: ImportType): Record<string, string> {
   const mapping: Record<string, string> = {}
   for (const header of headers) {
     const normalized = header.trim().toLowerCase()
-    const match = HEADER_ALIASES[header.trim()] ?? HEADER_ALIASES[normalized]
+    let match = HEADER_ALIASES[header.trim()] ?? HEADER_ALIASES[normalized]
+    // For members sheet: صنف / gender maps to 'gender', not 'head_gender'
+    if (importType === 'related' && match === 'head_gender') match = 'gender'
     mapping[header] = match ?? ''
   }
   return mapping

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { getTranslations } from 'next-intl/server'
 import SubCasteManager from './_components/SubCasteManager'
 
 export default async function SubCastePage() {
@@ -38,10 +39,12 @@ export default async function SubCastePage() {
     household_count: (s.households as any)?.[0]?.count ?? 0,
   }))
 
+  const t = await getTranslations('nav')
+
   return (
     <div className="max-w-5xl">
       <div className="mb-5">
-        <h1 className="text-2xl font-bold text-foreground">Sub Caste Management</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('subCaste')}</h1>
       </div>
       <div className="mb-4 bg-accent border border-border rounded-lg px-4 py-3 text-sm text-accent-foreground">
         Sub Caste must be created before importing data. Each import file is linked to one sub caste.
