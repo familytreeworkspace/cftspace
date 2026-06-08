@@ -42,11 +42,12 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md">
         {/* Branding */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-[0_8px_24px_rgba(0,0,0,0.12)] ring-1 ring-black/5 mb-4">
-            <svg className="w-9 h-9 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-white shadow-[0_8px_24px_rgba(0,0,0,0.12)] ring-1 ring-black/5 mb-4 overflow-hidden">
+            <img
+              src="/icons/icon-512.png"
+              alt="Community Family Tree Space"
+              className="w-full h-full object-contain p-1.5"
+            />
           </div>
           <h1 className="text-3xl font-bold text-gray-800 tracking-tight">Community Family Tree Space</h1>
           <p className="text-gray-500 mt-1 text-sm">{t('auth.platform')}</p>
