@@ -3,6 +3,7 @@ import { Inter, Lora, Amiri } from 'next/font/google'
 import { NextIntlClientProvider } from 'next-intl'
 import { getLocale, getMessages } from 'next-intl/server'
 import './globals.css'
+import TitleMarquee from './TitleMarquee'
 
 const inter = Inter({
   variable: '--font-inter',
@@ -26,7 +27,7 @@ const amiri = Amiri({
 })
 
 export const metadata: Metadata = {
-  title: 'CFTSpace — Community Family Tree',
+  title: 'Community Family Tree Space',
   description: 'Community Family Tree Platform — manage, view and link family records',
   manifest: '/manifest.json',
   icons: {
@@ -66,6 +67,7 @@ export default async function RootLayout({
       className={`${inter.variable} ${lora.variable} ${amiri.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
+        <TitleMarquee />
         <NextIntlClientProvider locale={locale} messages={messages}>
           {children}
         </NextIntlClientProvider>

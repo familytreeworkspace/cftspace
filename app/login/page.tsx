@@ -30,26 +30,41 @@ export default function LoginPage() {
     }
   }
 
+  const googleConic =
+    'conic-gradient(from 0deg, #4285F4, #EA4335, #FBBC05, #34A853, #4285F4)'
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-950 via-blue-900 to-blue-800 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden bg-gradient-to-br from-slate-100 via-white to-slate-200">
+      {/* Crystal-white soft light overlays */}
+      <div className="pointer-events-none absolute inset-0"
+        style={{ background: 'radial-gradient(1200px 500px at 50% -10%, rgba(255,255,255,0.9), transparent), radial-gradient(800px 400px at 80% 110%, rgba(226,232,240,0.7), transparent)' }} />
+
+      <div className="relative w-full max-w-md">
         {/* Branding */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-sm mb-4">
-            <svg className="w-9 h-9 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-[0_8px_24px_rgba(0,0,0,0.12)] ring-1 ring-black/5 mb-4">
+            <svg className="w-9 h-9 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                 d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Community Family Tree Space</h1>
-          <p className="text-blue-200 mt-1 text-sm">{t('auth.platform')}</p>
+          <h1 className="text-3xl font-bold text-gray-800 tracking-tight">Community Family Tree Space</h1>
+          <p className="text-gray-500 mt-1 text-sm">{t('auth.platform')}</p>
         </div>
 
-        {/* Card */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <h2 className="text-xl font-semibold text-gray-800 mb-6">{t('auth.signInTitle')}</h2>
+        {/* Animated Google-colour border wrapper */}
+        <div className="relative">
+          {/* Crisp rotating border ring (no background glow) */}
+          <div className="relative rounded-2xl p-[3px] overflow-hidden">
+            <div className="absolute inset-[-60%] animate-[spin_6s_linear_infinite]"
+              style={{ background: googleConic }} />
 
-          <form action={handleSubmit} className="space-y-5">
+            {/* Raised / embossed card — lifted higher */}
+            <div className="relative z-10 bg-white rounded-[14px] p-8
+              shadow-[0_36px_70px_-18px_rgba(0,0,0,0.45),0_12px_28px_-10px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.95)]">
+              <h2 className="text-xl font-semibold text-gray-800 mb-6 text-center">{t('auth.signInTitle')}</h2>
+
+              <form action={handleSubmit} className="space-y-5">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
                 {t('auth.email')}
@@ -89,17 +104,19 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-semibold py-2.5 px-4 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-blue-400 text-white font-semibold py-2.5 px-4 rounded-lg transition-all duration-150 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 active:shadow-md disabled:translate-y-0 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               {loading ? t('auth.signingIn') : t('auth.signIn')}
             </button>
-          </form>
+              </form>
+            </div>
+          </div>
         </div>
 
         {/* Install as App (Android / Desktop / iOS) */}
         <InstallAppButton />
 
-        <p className="text-center text-blue-300 text-xs mt-6">
+        <p className="text-center text-gray-400 text-xs mt-6">
           {t('auth.contactAdmin')}
         </p>
       </div>

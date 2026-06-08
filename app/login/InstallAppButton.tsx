@@ -51,7 +51,7 @@ export default function InstallAppButton() {
       <button
         type="button"
         onClick={handleClick}
-        className="w-full flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white border border-white/25 font-semibold py-2.5 px-4 rounded-lg transition-colors backdrop-blur-sm"
+        className="w-full flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-semibold py-2.5 px-4 rounded-lg transition-all duration-150 shadow-[0_4px_14px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 hover:shadow-[0_8px_20px_rgba(0,0,0,0.12)] active:translate-y-0 active:shadow-[0_3px_10px_rgba(0,0,0,0.1)]"
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" />
@@ -60,17 +60,17 @@ export default function InstallAppButton() {
       </button>
 
       {showHelp && (
-        <div className="mt-3 rounded-lg bg-white/10 border border-white/20 px-4 py-3 text-xs text-blue-100 leading-relaxed">
+        <div className="mt-3 rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 text-xs text-gray-600 leading-relaxed">
           {isIOS ? (
             <>
-              <p className="font-semibold text-white mb-1">iPhone / iPad (Safari):</p>
+              <p className="font-semibold text-gray-800 mb-1">iPhone / iPad (Safari):</p>
               <p>1. Niche <span className="font-semibold">Share</span> button (⬆️) dabayein</p>
               <p>2. <span className="font-semibold">“Add to Home Screen”</span> chunein</p>
               <p>3. <span className="font-semibold">Add</span> dabayein — app home screen par aa jayegi</p>
             </>
           ) : (
             <>
-              <p className="font-semibold text-white mb-1">Install nahi dikha?</p>
+              <p className="font-semibold text-gray-800 mb-1">Install nahi dikha?</p>
               <p>Browser ke <span className="font-semibold">menu (⋮)</span> mein jaa kar <span className="font-semibold">“Install app”</span> / <span className="font-semibold">“Add to Home screen”</span> chunein. (Production site par hi kaam karega.)</p>
             </>
           )}
