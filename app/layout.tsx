@@ -39,7 +39,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: 'CFTSpace',
+    title: 'Community Family Tree Space',
     statusBarStyle: 'default',
   },
 }

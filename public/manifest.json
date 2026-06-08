@@ -1,6 +1,6 @@
 {
-  "name": "CFTSpace — Community Family Tree",
-  "short_name": "CFTSpace",
+  "name": "Community Family Tree Space",
+  "short_name": "Family Tree",
   "description": "Community Family Tree Platform — manage, view and link family records",
   "start_url": "/dashboard",
   "display": "standalone",
