@@ -35,12 +35,28 @@ export default function TreeExplorer({
   const [positions, setPositions]     = useState<{ node_id: string; x: number; y: number }[]>([])
   const [loading, startLoading]       = useTransition()
   const [search, setSearch]           = useState('')
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
+
+  // Mobile search-icon cycle:
+  //  • overlay open            → close it (search results stay on screen)
+  //  • overlay closed + active  → clear the search (tree refreshes to show all)
+  //  • overlay closed + empty   → open the overlay
+  function toggleMobileSearch() {
+    if (mobileSearchOpen) {
+      setMobileSearchOpen(false)
+    } else if (search.trim()) {
+      setSearch('')
+    } else {
+      setMobileSearchOpen(true)
+    }
+  }
 
   function loadSubCaste(scId: string) {
     setSelectedId(scId)
     setAllTrees([])
     setCrossLinks([])
     setSearch('')
+    setMobileSearchOpen(false)
     startLoading(async () => {
       const { trees: raw, crossLinks: cl, positions: pos } = await getSubCasteTreeData(scId)
       setPositions(pos ?? [])
@@ -126,7 +142,7 @@ export default function TreeExplorer({
   const matchCount = matchHhIds ? matchHhIds.size : null
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
+    <div className="relative flex flex-col h-full bg-slate-50">
 
       {/* ── Top Bar ── */}
       <div className="flex items-center gap-3 px-4 py-2.5 bg-white border-b border-gray-200 shadow-sm flex-shrink-0">
@@ -160,7 +176,9 @@ export default function TreeExplorer({
         {selectedId && allTrees.length > 0 && (
           <>
             <div className="w-px h-8 bg-gray-200 flex-shrink-0" />
-            <div className="flex items-center gap-2">
+
+            {/* Desktop: inline search box */}
+            <div className="hidden sm:flex items-center gap-2">
               <div className="relative">
                 <input
                   type="text"
@@ -190,6 +208,22 @@ export default function TreeExplorer({
                 </span>
               )}
             </div>
+
+            {/* Mobile: search icon toggle */}
+            <button
+              onClick={toggleMobileSearch}
+              aria-label="Search"
+              className={[
+                'sm:hidden flex items-center justify-center w-9 h-9 rounded-lg border flex-shrink-0 transition-colors',
+                mobileSearchOpen || search.trim()
+                  ? 'border-blue-400 bg-blue-50 text-blue-600'
+                  : 'border-gray-200 bg-white text-gray-500 active:bg-gray-100',
+              ].join(' ')}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
           </>
         )}
 
@@ -212,21 +246,6 @@ export default function TreeExplorer({
 
         {/* Spacer */}
         <div className="flex-1" />
-
-        {/* Legend */}
-        {selectedId && !loading && allTrees.length > 0 && (
-          <div className="hidden sm:flex items-center gap-3 text-[10px] text-gray-400 flex-shrink-0">
-            <span className="flex items-center gap-1">
-              <span className="w-5 border-t border-gray-400 inline-block" />Spouse
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-5 border-t-2 border-gray-700 inline-block" />Parent-Child
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-5 border-t-2 border-indigo-500 inline-block" />Cross-Link
-            </span>
-          </div>
-        )}
 
         {/* User info + Logout (always visible for viewer, optional for others) */}
         {isViewer && (
@@ -255,6 +274,45 @@ export default function TreeExplorer({
           </>
         )}
       </div>
+
+      {/* ── Mobile Search Overlay (top-center, semi-transparent) ── */}
+      {mobileSearchOpen && selectedId && allTrees.length > 0 && (
+        <div className="sm:hidden absolute top-2 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-sm">
+          <div className="relative bg-white/85 backdrop-blur-sm border border-gray-200 rounded-xl shadow-lg px-2 py-2">
+            <div className="relative">
+              <input
+                type="text"
+                autoFocus
+                placeholder="Search any name…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full text-sm border border-gray-200 rounded-lg pl-9 pr-9 py-2 bg-white/90 outline-none focus:ring-2 focus:ring-blue-400"
+              />
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+            {matchCount !== null && (
+              <div className="mt-1.5 flex justify-center">
+                <span className={[
+                  'text-xs font-medium px-2 py-0.5 rounded-full',
+                  matchCount > 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-50 text-red-500',
+                ].join(' ')}>
+                  {matchCount} {matchCount === 1 ? 'family' : 'families'}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Canvas Area ── */}
       <div className="flex-1 overflow-hidden relative">
