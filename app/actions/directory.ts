@@ -80,6 +80,87 @@ export async function batchInsertIntoDirectory(
   }
 }
 
+// ── Live autocomplete + dedup-safe add ────────────────────────────────────────
+
+// Typeahead search within a category, matching any of the three languages
+export async function searchDirectory(category: string, query: string): Promise<DirectoryEntry[]> {
+  const q = (query ?? '').trim().replace(/[,()%]/g, ' ').trim()
+  if (!q) return []
+  try {
+    const supabase = await createClient()
+    const { data } = await supabase
+      .from('directory')
+      .select('*')
+      .eq('category', category)
+      .or(`english_word.ilike.%${q}%,sindhi_word.ilike.%${q}%,hindi_word.ilike.%${q}%`)
+      .limit(8)
+    return (data ?? []) as DirectoryEntry[]
+  } catch {
+    return []
+  }
+}
+
+// Add an entry — but NEVER create a duplicate. If a matching word already exists in the
+// same category (case-insensitive, any language), reuse it and fill in missing translations.
+export async function upsertDirectoryEntry(input: {
+  category: string
+  english?: string | null
+  sindhi?: string | null
+  hindi?: string | null
+}): Promise<{ entry?: DirectoryEntry; error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Not authenticated' }
+
+    const english = input.english?.trim() || null
+    const sindhi  = input.sindhi?.trim()  || null
+    const hindi   = input.hindi?.trim()   || null
+    if (!english && !sindhi && !hindi) return { error: 'Nothing to add' }
+
+    // Dedup: scan this category for any case-insensitive match across languages
+    const { data: rows } = await supabase
+      .from('directory').select('*').eq('category', input.category)
+    const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
+    const match = (rows ?? []).find((e: any) =>
+      (english && norm(e.english_word) === norm(english)) ||
+      (sindhi  && norm(e.sindhi_word)  === norm(sindhi))  ||
+      (hindi   && norm(e.hindi_word)   === norm(hindi))
+    ) as DirectoryEntry | undefined
+
+    if (match) {
+      const upd: any = {}
+      if (english && !match.english_word) upd.english_word = english
+      if (sindhi  && !match.sindhi_word)  upd.sindhi_word  = sindhi
+      if (hindi   && !match.hindi_word)   upd.hindi_word   = hindi
+      if (Object.keys(upd).length) {
+        upd.updated_at = new Date().toISOString()
+        await supabase.from('directory').update(upd).eq('id', match.id)
+      }
+      return { entry: { ...match, ...upd } }
+    }
+
+    const keyWord = sindhi ?? english ?? hindi!   // sindhi_word is the storage key
+    const { data: inserted, error } = await supabase
+      .from('directory')
+      .insert({
+        sindhi_word:  keyWord,
+        english_word: english,
+        hindi_word:   hindi,
+        category:     input.category,
+        updated_at:   new Date().toISOString(),
+      })
+      .select('*')
+      .single()
+    if (error) return { error: error.message }
+
+    revalidatePath('/directory')
+    return { entry: inserted as DirectoryEntry }
+  } catch (err: any) {
+    return { error: err.message }
+  }
+}
+
 // ── Read ─────────────────────────────────────────────────────────────────────
 
 export async function getDirectoryEntries(filter?: {

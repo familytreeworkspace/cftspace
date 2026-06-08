@@ -268,6 +268,12 @@ export async function getSubCasteTreeData(subCasteId: string) {
     .select('id, child_household_id, parent_household_id, relation, link_type')
     .in('child_household_id', householdIds)
 
+  // Saved manual card positions (table added by migration 010 — ignore if not applied yet)
+  const { data: positionsData } = await (supabase as any)
+    .from('tree_positions')
+    .select('node_id, x, y')
+    .eq('sub_caste_id', subCasteId)
+
   const trees = households.map((h: any) => {
     const members = (allMembers ?? []).filter(m => m.household_id === h.id)
     const hMemberIds = new Set([h.id, ...members.map(m => m.id)])
@@ -275,7 +281,49 @@ export async function getSubCasteTreeData(subCasteId: string) {
     return { household: h, members, links }
   })
 
-  return { trees, crossLinks: crossLinksData ?? [] }
+  return { trees, crossLinks: crossLinksData ?? [], positions: positionsData ?? [] }
+}
+
+// Save (upsert) a card's manual position
+export async function saveNodePosition(
+  subCasteId: string, nodeId: string, x: number, y: number,
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data: profile } = await supabase
+    .from('users').select('role').eq('id', user.id).single()
+  if (!profile || !['chief', 'admin'].includes(profile.role)) {
+    return { error: 'Only Admin or Chief can move cards.' }
+  }
+
+  const { error } = await (supabase as any)
+    .from('tree_positions')
+    .upsert(
+      { sub_caste_id: subCasteId, node_id: nodeId, x, y, updated_at: new Date().toISOString() },
+      { onConflict: 'sub_caste_id,node_id' },
+    )
+  if (error) return { error: error.message }
+  return {}
+}
+
+// Clear all saved positions for a sub caste (back to automatic layout)
+export async function resetTreeLayout(subCasteId: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data: profile } = await supabase
+    .from('users').select('role').eq('id', user.id).single()
+  if (!profile || !['chief', 'admin'].includes(profile.role)) {
+    return { error: 'Only Admin or Chief can reset the layout.' }
+  }
+
+  const { error } = await (supabase as any)
+    .from('tree_positions').delete().eq('sub_caste_id', subCasteId)
+  if (error) return { error: error.message }
+  return {}
 }
 
 // Add father/ancestor as a member inside the SAME household (shows in same blue box)

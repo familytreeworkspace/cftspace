@@ -32,6 +32,7 @@ export default function TreeExplorer({
   const [selectedId, setSelectedId]   = useState<string | null>(null)
   const [allTrees, setAllTrees]       = useState<HouseholdTree[]>([])
   const [crossLinks, setCrossLinks]   = useState<CrossHouseholdLink[]>([])
+  const [positions, setPositions]     = useState<{ node_id: string; x: number; y: number }[]>([])
   const [loading, startLoading]       = useTransition()
   const [search, setSearch]           = useState('')
 
@@ -41,7 +42,8 @@ export default function TreeExplorer({
     setCrossLinks([])
     setSearch('')
     startLoading(async () => {
-      const { trees: raw, crossLinks: cl } = await getSubCasteTreeData(scId)
+      const { trees: raw, crossLinks: cl, positions: pos } = await getSubCasteTreeData(scId)
+      setPositions(pos ?? [])
 
       const trees: HouseholdTree[] = raw.map(item => ({
         householdId:    item.household.id,
@@ -298,6 +300,8 @@ export default function TreeExplorer({
             allTrees={filteredTrees}
             canEdit={canEdit}
             crossLinks={crossLinks}
+            subCasteId={selectedId!}
+            positions={positions}
             onTreeUpdated={handleTreeUpdated}
           />
         )}

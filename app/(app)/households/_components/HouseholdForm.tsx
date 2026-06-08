@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { createHousehold, updateHousehold } from '@/app/actions/households'
 import { getTransliteration } from '@/app/actions/transliteration'
+import DirectoryInput from '@/app/(app)/_components/DirectoryInput'
 
 interface SubCaste { id: string; name: string }
 
@@ -40,6 +41,8 @@ export default function HouseholdForm({
   const [hindiName, setHindiName] = useState(household?.head_name_hindi || '')
   const [confidence, setConfidence] = useState(0)
   const [headNameValue, setHeadNameValue] = useState(household?.head_name || '')
+  const [education, setEducation] = useState(household?.education || '')
+  const [profession, setProfession] = useState(household?.profession || '')
 
   async function handleGetSuggestion() {
     if (!headNameValue.trim()) {
@@ -224,9 +227,11 @@ export default function HouseholdForm({
             <label className="block text-xs font-medium text-muted-foreground mb-1.5">
               Education (تعليم)
             </label>
-            <input
+            <DirectoryInput
+              category="education"
               name="education"
-              defaultValue={household?.education ?? ''}
+              value={education}
+              onChange={setEducation}
               placeholder="e.g. Matric, Graduate"
               className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
@@ -236,9 +241,11 @@ export default function HouseholdForm({
             <label className="block text-xs font-medium text-muted-foreground mb-1.5">
               Profession (ڪاروبار)
             </label>
-            <input
+            <DirectoryInput
+              category="profession"
               name="profession"
-              defaultValue={household?.profession ?? ''}
+              value={profession}
+              onChange={setProfession}
               placeholder="e.g. Farmer, Business"
               className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />

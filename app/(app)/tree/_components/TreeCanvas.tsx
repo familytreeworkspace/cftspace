@@ -13,7 +13,7 @@ import { FamilyTreeNode, type FamilyNodeData } from './FamilyTreeNode'
 import { FamilyEdge, SpouseEdge } from './FamilyEdge'
 import { LinkConfirmModal } from './LinkConfirmModal'
 import { AddAncestorModal } from './AddAncestorModal'
-import { createHouseholdLink, linkMembers, removeHouseholdLink, setDeathYear } from '@/app/actions/tree'
+import { createHouseholdLink, linkMembers, removeHouseholdLink, setDeathYear, saveNodePosition, resetTreeLayout } from '@/app/actions/tree'
 import type { HouseholdTree, CrossHouseholdLink } from './types'
 import type { AncestorTrigger } from './MemberFlowNode'
 
@@ -67,6 +67,8 @@ interface Props {
   allTrees:      HouseholdTree[]
   canEdit:       boolean
   crossLinks:    CrossHouseholdLink[]
+  subCasteId:    string
+  positions:     { node_id: string; x: number; y: number }[]
   onTreeUpdated: () => void
 }
 
@@ -241,10 +243,11 @@ function buildFlowElements(
   onUnlink: (householdId: string) => void,
   ancestorRelation: Map<string, string>,
   onMarkDeath: (id: string, isHead: boolean, year: number | null) => void,
-): { nodes: Node[]; edges: Edge[] } {
+): { nodes: Node[]; edges: Edge[]; coupleJunctions: { jxnId: string; headId: string; wifeId: string }[] } {
 
   const nodes: Node[] = []
   const edges: Edge[] = []
+  const coupleJunctions: { jxnId: string; headId: string; wifeId: string }[] = []
   const seenNodes   = new Set<string>()
   const seenEdges   = new Set<string>()
   const walkedHhIds = new Set<string>()
@@ -364,6 +367,7 @@ function buildFlowElements(
 
     if (hasWife) {
       addJunction(`jxn-${ln.hhId}`, ln.cx - 1, ln.y + CARD_MID - 1)
+      coupleJunctions.push({ jxnId: `jxn-${ln.hhId}`, headId: ln.head.id, wifeId: ln.wife!.id })
     }
 
     // Own member-children — always rendered (even alongside linked child households)
@@ -375,10 +379,9 @@ function buildFlowElements(
     // Linked child households — attach to the child's junction (couple) or head top (single)
     ln.children.forEach(ch => {
       walk(ch)
-      const chHasWife = !!ch.wife
-      const upId      = chHasWife ? `jxn-${ch.hhId}` : ch.head.id
-      const upHandle  = chHasWife ? 'jxn-in' : 'top'
-      addEdge(`hhlink-${ln.hhId}-${ch.hhId}`, downId, upId, 'family', downHandle, upHandle)
+      // A linked child attaches at the CHILD HEAD's top-centre (the blood descendant) —
+      // never at the child couple's centre, because the spouse married in is not a child here.
+      addEdge(`hhlink-${ln.hhId}-${ch.hhId}`, downId, ch.head.id, 'family', downHandle, 'top')
       // Spouse-merged wife's child also gets a SEPARATE line from her card's right-centre
       // straight to the child head's TOP centre
       if (ln.wifeChildHhIds?.has(ch.hhId) && ln.wifeHeadId) {
@@ -388,11 +391,11 @@ function buildFlowElements(
   }
 
   roots.forEach(r => walk(r))
-  return { nodes, edges }
+  return { nodes, edges, coupleJunctions }
 }
 
 // ── Main component ────────────────────────────────────────────
-export default function TreeCanvas({ allTrees, canEdit, crossLinks, onTreeUpdated }: Props) {
+export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, positions, onTreeUpdated }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [graphicMode, setGraphicMode]   = useState(false)
@@ -406,6 +409,7 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, onTreeUpdate
   const nodesRef = useRef<Node[]>([])
   const savedPos = useRef<Map<string, { x: number; y: number }>>(new Map())
   const rfInstance = useRef<any>(null)
+  const coupleJxnRef = useRef<{ jxnId: string; headId: string; wifeId: string }[]>([])
 
   const handleAddRelative = useCallback((nodeId: string, pos: 'top' | 'bottom') => {
     const hid  = nhMap.current.get(nodeId) ?? ''
@@ -436,6 +440,14 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, onTreeUpdate
     onTreeUpdated()
   }, [onTreeUpdated])
 
+  const handleResetLayout = useCallback(async () => {
+    setActionError('')
+    savedPos.current = new Map()
+    const r = await resetTreeLayout(subCasteId)
+    if (r.error) { setActionError(r.error); return }
+    onTreeUpdated()
+  }, [subCasteId, onTreeUpdated])
+
   useEffect(() => {
     if (allTrees.length === 0) { setNodes([]); setEdges([]); nodesRef.current = []; return }
 
@@ -445,7 +457,7 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, onTreeUpdate
     let startX = 0
     roots.forEach(r => {
       assignPositions(r, startX, 0)
-      startX += r.subtreeW + SIBLING_GAP * 2
+      startX += r.subtreeW + SIBLING_GAP
     })
 
     const linkedChildHhIds = new Set(crossLinks.map(cl => cl.child_household_id))
@@ -455,16 +467,28 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, onTreeUpdate
     crossLinks.forEach(cl => {
       if (virtualHhIds.has(cl.parent_household_id)) ancestorRelation.set(cl.parent_household_id, cl.relation)
     })
-    const { nodes: newNodes, edges: newEdges } = buildFlowElements(
+    const { nodes: newNodes, edges: newEdges, coupleJunctions } = buildFlowElements(
       roots, graphicMode, canEdit, linkMode, handleAddRelative, linkedChildHhIds, handleUnlink, ancestorRelation, handleMarkDeath
     )
 
-    // Restore manually dragged positions — only for family card nodes
+    // Restore positions — in-session drags first, then positions saved in the DB
+    const dbPos = new Map(positions.map(p => [p.node_id, { x: p.x, y: p.y }]))
     newNodes.forEach(n => {
       if (n.type !== 'familyNode') return
-      const saved = savedPos.current.get(n.id)
+      const saved = savedPos.current.get(n.id) ?? dbPos.get(n.id)
       if (saved) n.position = saved
     })
+
+    // Junctions follow their couple — recompute from the cards' ACTUAL (restored) positions
+    coupleJunctions.forEach(({ jxnId, headId, wifeId }) => {
+      const h = newNodes.find(n => n.id === headId)
+      const w = newNodes.find(n => n.id === wifeId)
+      const j = newNodes.find(n => n.id === jxnId)
+      if (h && w && j) {
+        j.position = { x: (h.position.x + CARD_W + w.position.x) / 2 - 1, y: h.position.y + CARD_MID - 1 }
+      }
+    })
+    coupleJxnRef.current = coupleJunctions
 
     // Build lookup maps for family card nodes only
     const nm = new Map<string, string>()
@@ -480,7 +504,10 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, onTreeUpdate
     nodesRef.current = newNodes
     setNodes(newNodes)
     setEdges(newEdges)
-  }, [allTrees, crossLinks, graphicMode, canEdit, linkMode, handleAddRelative, handleUnlink, handleMarkDeath, setNodes, setEdges])
+  }, [allTrees, crossLinks, positions, graphicMode, canEdit, linkMode, handleAddRelative, handleUnlink, handleMarkDeath, setNodes, setEdges])
+
+  // New sub caste → drop any in-session drag overrides so DB positions take effect
+  useEffect(() => { savedPos.current = new Map() }, [subCasteId])
 
   const handleNodesChange = useCallback((changes: NodeChange[]) => {
     onNodesChange(changes)
@@ -498,19 +525,41 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, onTreeUpdate
   }, [onNodesChange])
 
   const onNodeDragStop = useCallback((_: unknown, draggedNode: Node) => {
-    if (!linkMode || draggedNode.type !== 'familyNode') return
-    // Use React Flow's built-in overlap detection — reliable card-on-card hit testing
-    const overlaps = rfInstance.current?.getIntersectingNodes(draggedNode) ?? []
-    const target = overlaps.find((n: Node) => n.type === 'familyNode' && n.id !== draggedNode.id)
-    if (target) {
-      setPendingLink({
-        sourceId:   draggedNode.id,
-        targetId:   target.id,
-        sourceName: nnMap.current.get(draggedNode.id) ?? 'Person',
-        targetName: nnMap.current.get(target.id)     ?? 'Person',
-      })
+    if (draggedNode.type !== 'familyNode') return
+
+    if (linkMode) {
+      // Link Mode — drop one card on another to link them
+      const overlaps = rfInstance.current?.getIntersectingNodes(draggedNode) ?? []
+      const target = overlaps.find((n: Node) => n.type === 'familyNode' && n.id !== draggedNode.id)
+      if (target) {
+        setPendingLink({
+          sourceId:   draggedNode.id,
+          targetId:   target.id,
+          sourceName: nnMap.current.get(draggedNode.id) ?? 'Person',
+          targetName: nnMap.current.get(target.id)     ?? 'Person',
+        })
+      }
+      return
     }
-  }, [linkMode])
+
+    // Arrange Mode — persist the card's new position so it survives reloads
+    if (canEdit) {
+      savedPos.current.set(draggedNode.id, draggedNode.position)
+      saveNodePosition(subCasteId, draggedNode.id, draggedNode.position.x, draggedNode.position.y)
+
+      // If this card belongs to a couple, snap its junction so the child lines follow
+      const cj = coupleJxnRef.current.find(c => c.headId === draggedNode.id || c.wifeId === draggedNode.id)
+      if (cj) {
+        setNodes(ns => {
+          const h = ns.find(n => n.id === cj.headId)
+          const w = ns.find(n => n.id === cj.wifeId)
+          if (!h || !w) return ns
+          const jp = { x: (h.position.x + CARD_W + w.position.x) / 2 - 1, y: h.position.y + CARD_MID - 1 }
+          return ns.map(n => n.id === cj.jxnId ? { ...n, position: jp } : n)
+        })
+      }
+    }
+  }, [linkMode, canEdit, subCasteId, setNodes])
 
   const onConnect = useCallback((c: Connection) => {
     if (!canEdit || !linkMode || !c.source || !c.target || c.source === c.target) return
@@ -619,7 +668,19 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, onTreeUpdate
                     Link Mode
                   </span>
                 </div>
+
+                <div className="w-px h-5 bg-gray-200" />
+                <button
+                  onClick={handleResetLayout}
+                  className="text-gray-500 hover:text-red-600 font-medium text-xs transition-colors"
+                  title="Clear saved positions and return to automatic layout"
+                >
+                  Reset Layout
+                </button>
               </>
+            )}
+            {!linkMode && canEdit && (
+              <span className="text-gray-300 text-[10px] hidden md:inline">· drag cards to arrange (auto-saved)</span>
             )}
           </div>
         </Panel>

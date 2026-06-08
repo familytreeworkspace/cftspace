@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Bell, Globe, User, LogOut, Settings } from 'lucide-react'
+import { Bell, Globe, User, LogOut, Settings, LayoutGrid } from 'lucide-react'
 import { useTransition, useState } from 'react'
 import { setLocale } from '@/app/actions/locale'
 import { logout } from '@/app/actions/auth'
@@ -19,11 +19,13 @@ export default function AppHeader({
   userRole,
   pendingCorrections = 0,
   locale,
+  onMenuClick,
 }: {
   userName?: string
   userRole?: string
   pendingCorrections?: number
   locale: Locale
+  onMenuClick?: () => void
 }) {
   const [isPending, startTransition] = useTransition()
   const [langOpen, setLangOpen] = useState(false)
@@ -37,7 +39,17 @@ export default function AppHeader({
   const currentLang = LANGS.find(l => l.code === locale)
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-card/80 backdrop-blur px-4 no-print">
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-card/80 backdrop-blur px-3 sm:px-4 no-print">
+      {/* Menu — slides the sidebar open */}
+      <button
+        onClick={onMenuClick}
+        aria-label="Open menu"
+        className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-gold/15 text-gold hover:bg-gold/25 active:scale-95 transition-all"
+        style={{ color: '#f5b400' }}
+      >
+        <LayoutGrid className="h-5 w-5" fill="currentColor" strokeWidth={1.5} />
+      </button>
+
       {/* Left — page title slot (empty, sidebar shows nav) */}
       <div className="flex-1" />
 

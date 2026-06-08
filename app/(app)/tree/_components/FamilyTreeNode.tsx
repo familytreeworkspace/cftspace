@@ -27,8 +27,8 @@ const MALE_BG   = '#eff6ff'   // blue-50
 const MALE_BOR  = '#3b82f6'   // blue-500
 const FEM_BG    = '#fdf2f8'   // pink-50
 const FEM_BOR   = '#ec4899'   // pink-500
-const DEAD_BG   = '#f1f5f9'   // slate-100
-const DEAD_BOR  = '#94a3b8'   // slate-400
+const DEAD_BG   = '#cbd5e1'   // slate-300 — clearly visible grey
+const DEAD_BOR  = '#64748b'   // slate-500
 
 // Black silhouette SVGs — male standing figure, female dress figure
 function MaleSymbol({ size }: { size: number }) {

@@ -29,12 +29,25 @@ export const metadata: Metadata = {
   title: 'CFTSpace — Community Family Tree',
   description: 'Community Family Tree Platform — manage, view and link family records',
   manifest: '/manifest.json',
+  icons: {
+    icon: [
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [{ url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: 'CFTSpace',
+    statusBarStyle: 'default',
+  },
 }
 
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
+  themeColor: '#1e3a5f',
 }
 
 export default async function RootLayout({
