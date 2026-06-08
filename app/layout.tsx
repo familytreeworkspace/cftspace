@@ -28,7 +28,7 @@ const amiri = Amiri({
 
 export const metadata: Metadata = {
   title: 'Community Family Tree Space',
-  description: 'Community Family Tree Platform — manage, view and link family records',
+  description: 'CFTSpace is a comprehensive Community Family Tree Platform dedicated to bringing entire community histories and family roots to life on a single, secure platform. Designed to bridge generations, it empowers castes and communities to seamlessly manage households, track member relations, and preserve their heritage across various sub-castes. With intuitive support for both graphical and text-based interactive family trees, CFTSpace makes exploring and linking family records beautifully simple. Designed & Developed by: Mahadev S/O Dr. Harchand Rai Makwana Suthar.',
   manifest: '/manifest.json',
   icons: {
     icon: [
