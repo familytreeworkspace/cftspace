@@ -134,7 +134,7 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-family: var(--font-sans), var(--font-mb-sindhi), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: var(--font-inter), "MBSindhiUnicode", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 0.9375rem;
     line-height: 1.5;
     font-weight: 400;
@@ -180,6 +180,22 @@
   font-family: var(--font-mb-sindhi), var(--font-amiri), "Amiri", Georgia, serif;
   line-height: 2;
 }
+
+/* Force MB Sindhi for Arabic/Sindhi script characters in ANY language mode.
+   unicode-range covers: Arabic block, Extended Arabic, Presentation Forms.
+   Browser picks this @font-face automatically for these code points — Segoe UI
+   and other system fonts are bypassed for Sindhi script even in English mode.  */
+@font-face {
+  font-family: "MBSindhiUnicode";
+  src: url("/fonts/mbsindhiweb.otf") format("opentype");
+  unicode-range:
+    U+0600-U+06FF,   /* Arabic */
+    U+0750-U+077F,   /* Arabic Supplement */
+    U+FB50-U+FDFF,   /* Arabic Presentation Forms-A */
+    U+FE70-U+FEFF;   /* Arabic Presentation Forms-B */
+  font-display: swap;
+}
+
 
 @media print {
   .no-print { display: none !important; }
