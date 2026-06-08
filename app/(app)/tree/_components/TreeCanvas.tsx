@@ -410,6 +410,7 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, 
   const savedPos = useRef<Map<string, { x: number; y: number }>>(new Map())
   const rfInstance = useRef<any>(null)
   const coupleJxnRef = useRef<{ jxnId: string; headId: string; wifeId: string }[]>([])
+  const lastSigRef = useRef<string>('')
 
   const handleAddRelative = useCallback((nodeId: string, pos: 'top' | 'bottom') => {
     const hid  = nhMap.current.get(nodeId) ?? ''
@@ -504,6 +505,13 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, 
     nodesRef.current = newNodes
     setNodes(newNodes)
     setEdges(newEdges)
+
+    // Whenever the visible set of families changes (search / filter / sub caste), centre + zoom to fit
+    const sig = newNodes.filter(n => n.type === 'familyNode').map(n => n.id).sort().join(',')
+    if (sig && sig !== lastSigRef.current) {
+      lastSigRef.current = sig
+      setTimeout(() => rfInstance.current?.fitView({ padding: 0.2, maxZoom: 1.2, duration: 400 }), 60)
+    }
   }, [allTrees, crossLinks, positions, graphicMode, canEdit, linkMode, handleAddRelative, handleUnlink, handleMarkDeath, setNodes, setEdges])
 
   // New sub caste → drop any in-session drag overrides so DB positions take effect
