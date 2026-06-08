@@ -227,11 +227,11 @@ export default function TreeExplorer({
           </>
         )}
 
-        {/* Stats */}
+        {/* Stats — desktop only (mobile shows tiny stats bottom-left over the canvas) */}
         {selectedId && !loading && allTrees.length > 0 && (
           <>
-            <div className="w-px h-8 bg-gray-200 flex-shrink-0" />
-            <div className="flex items-center gap-3 text-xs text-gray-500">
+            <div className="hidden sm:block w-px h-8 bg-gray-200 flex-shrink-0" />
+            <div className="hidden sm:flex items-center gap-3 text-xs text-gray-500">
               <span className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />
                 {totalHouseholds} Households
@@ -377,6 +377,14 @@ export default function TreeExplorer({
             searchTerm={search}
             onTreeUpdated={handleTreeUpdated}
           />
+        )}
+
+        {/* Mobile-only tiny stats — transparent, no background, bottom-left above the Symbols/Photos bar */}
+        {selectedId && !loading && allTrees.length > 0 && filteredTrees.length > 0 && (
+          <div className="sm:hidden absolute left-3 bottom-16 z-40 text-[10px] leading-tight text-gray-400 pointer-events-none">
+            <div>{totalHouseholds} Households</div>
+            <div>{allTrees.reduce((s, t) => s + t.members.length + 1, 0)} Members</div>
+          </div>
         )}
       </div>
 
