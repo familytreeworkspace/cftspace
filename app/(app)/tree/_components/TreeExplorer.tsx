@@ -381,7 +381,7 @@ export default function TreeExplorer({
 
         {/* Mobile-only tiny stats — transparent, no background, bottom-left above the Symbols/Photos bar */}
         {selectedId && !loading && allTrees.length > 0 && filteredTrees.length > 0 && (
-          <div className="sm:hidden absolute left-3 bottom-16 z-40 text-[10px] leading-tight text-gray-400 pointer-events-none">
+          <div className="sm:hidden absolute left-3 bottom-16 z-40 text-xs font-bold leading-tight text-gray-400 pointer-events-none">
             <div>{totalHouseholds} Households</div>
             <div>{allTrees.reduce((s, t) => s + t.members.length + 1, 0)} Members</div>
           </div>
