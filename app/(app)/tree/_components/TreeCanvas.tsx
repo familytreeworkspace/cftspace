@@ -69,6 +69,7 @@ interface Props {
   crossLinks:    CrossHouseholdLink[]
   subCasteId:    string
   positions:     { node_id: string; x: number; y: number }[]
+  searchTerm?:   string
   onTreeUpdated: () => void
 }
 
@@ -243,7 +244,10 @@ function buildFlowElements(
   onUnlink: (householdId: string) => void,
   ancestorRelation: Map<string, string>,
   onMarkDeath: (id: string, isHead: boolean, year: number | null) => void,
+  searchTerm: string,
 ): { nodes: Node[]; edges: Edge[]; coupleJunctions: { jxnId: string; headId: string; wifeId: string }[] } {
+
+  const q = searchTerm.trim().toLowerCase()
 
   const nodes: Node[] = []
   const edges: Edge[] = []
@@ -277,6 +281,7 @@ function buildFlowElements(
         linkMode,
         isRoot,
         isHead,
+        highlight: !!q && (person.name ?? '').toLowerCase().includes(q),
         isLinkedChild: isHead && linkedChildHhIds.has(hhId),
         householdId: hhId,
         onAddRelative,
@@ -395,7 +400,7 @@ function buildFlowElements(
 }
 
 // ── Main component ────────────────────────────────────────────
-export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, positions, onTreeUpdated }: Props) {
+export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, positions, searchTerm = '', onTreeUpdated }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [graphicMode, setGraphicMode]   = useState(false)
@@ -469,7 +474,7 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, 
       if (virtualHhIds.has(cl.parent_household_id)) ancestorRelation.set(cl.parent_household_id, cl.relation)
     })
     const { nodes: newNodes, edges: newEdges, coupleJunctions } = buildFlowElements(
-      roots, graphicMode, canEdit, linkMode, handleAddRelative, linkedChildHhIds, handleUnlink, ancestorRelation, handleMarkDeath
+      roots, graphicMode, canEdit, linkMode, handleAddRelative, linkedChildHhIds, handleUnlink, ancestorRelation, handleMarkDeath, searchTerm
     )
 
     // Restore positions — in-session drags first, then positions saved in the DB
@@ -512,7 +517,7 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, 
       lastSigRef.current = sig
       setTimeout(() => rfInstance.current?.fitView({ padding: 0.2, maxZoom: 1.2, duration: 400 }), 60)
     }
-  }, [allTrees, crossLinks, positions, graphicMode, canEdit, linkMode, handleAddRelative, handleUnlink, handleMarkDeath, setNodes, setEdges])
+  }, [allTrees, crossLinks, positions, searchTerm, graphicMode, canEdit, linkMode, handleAddRelative, handleUnlink, handleMarkDeath, setNodes, setEdges])
 
   // New sub caste → drop any in-session drag overrides so DB positions take effect
   useEffect(() => { savedPos.current = new Map() }, [subCasteId])

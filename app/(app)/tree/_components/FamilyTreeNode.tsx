@@ -16,6 +16,7 @@ export type FamilyNodeData = {
   linkMode: boolean
   isRoot: boolean       // topmost known ancestor → show top "+"
   isHead: boolean
+  highlight?: boolean       // matched by the current search → orange highlight
   isLinkedChild?: boolean   // this household is linked under a parent household
   householdId: string
   onAddRelative: (nodeId: string, position: 'top' | 'bottom') => void
@@ -121,6 +122,7 @@ export const FamilyTreeNode = memo(function FamilyTreeNode({ data, selected }: N
   const isDeceased = !!(d.dobDeathYear)
   const bg  = isDeceased ? DEAD_BG  : d.gender === 'Female' ? FEM_BG  : MALE_BG
   const bor = isDeceased ? DEAD_BOR : d.gender === 'Female' ? FEM_BOR : MALE_BOR
+  const active = selected || d.highlight   // orange highlight on select OR search match
   const symbolSize = 22
 
   function handleAdd(nodeId: string, pos: 'top' | 'bottom', type: string) {
@@ -183,9 +185,9 @@ export const FamilyTreeNode = memo(function FamilyTreeNode({ data, selected }: N
         style={{
           width: 120,
           background: bg,
-          border: `2px solid ${selected ? '#f97316' : bor}`,
+          border: `2px solid ${active ? '#f97316' : bor}`,
           borderRadius: 10,
-          boxShadow: selected ? '0 0 0 3px #fed7aa' : '0 2px 6px rgba(0,0,0,0.08)',
+          boxShadow: active ? '0 0 0 3px #fed7aa' : '0 2px 6px rgba(0,0,0,0.08)',
           opacity: isDeceased ? 0.7 : 1,
           position: 'relative',
           overflow: 'hidden',

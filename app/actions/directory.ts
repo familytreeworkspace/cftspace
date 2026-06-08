@@ -404,11 +404,11 @@ export async function autoBackfill(targets?: BackfillTarget[]): Promise<{
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const upd: Record<string, string | null> = {}
         for (const field of target.blank_fields) {
-          if (field === 'head_name_sindhi' || field === 'name_sindhi') {
+          if (field === 'head_name_sindhi' || field === 'name_sindhi' || field === 'head_father_name_sindhi') {
             upd[field] = target.sindhi_name
-          } else if ((field === 'head_name_hindi' || field === 'name_hindi') && entry.hindi) {
+          } else if ((field === 'head_name_hindi' || field === 'name_hindi' || field === 'head_father_name_hindi') && entry.hindi) {
             upd[field] = entry.hindi
-          } else if ((field === 'head_name' || field === 'name') && entry.english) {
+          } else if ((field === 'head_name' || field === 'name' || field === 'head_father_name') && entry.english) {
             upd[field] = entry.english
           }
         }
@@ -428,23 +428,31 @@ export async function autoBackfill(targets?: BackfillTarget[]): Promise<{
     // ── Fallback: full scan (when called without pre-computed targets) ────────
 
     // Households — fill head_name, head_name_sindhi, head_name_hindi
-    const { data: households } = await supabase
+    const { data: households } = await (supabase
       .from('households')
-      .select('id, head_name, head_name_sindhi, head_name_hindi')
+      .select('id, head_name, head_name_sindhi, head_name_hindi, head_father_name, head_father_name_sindhi, head_father_name_hindi')) as { data: any[] | null }
 
     for (const hh of households ?? []) {
-      // Use any available name as lookup key — no script filter
-      const key = hh.head_name_sindhi?.trim() || hh.head_name?.trim()
-      if (!key) continue
-
-      const entry = lookup.get(key)
-      if (!entry) continue
-
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const upd: Record<string, string | null> = {}
-      if (!hh.head_name_sindhi?.trim() && isSindhiScript(key)) upd.head_name_sindhi = key
-      if (!hh.head_name_hindi?.trim() && entry.hindi) upd.head_name_hindi = entry.hindi
-      if ((!hh.head_name?.trim() || isSindhiScript(hh.head_name)) && entry.english) upd.head_name = entry.english
+
+      // Head name
+      const key = (hh as any).head_name_sindhi?.trim() || hh.head_name?.trim()
+      const entry = key ? lookup.get(key) : null
+      if (entry) {
+        if (!(hh as any).head_name_sindhi?.trim() && isSindhiScript(key)) upd.head_name_sindhi = key
+        if (!(hh as any).head_name_hindi?.trim() && entry.hindi) upd.head_name_hindi = entry.hindi
+        if ((!hh.head_name?.trim() || isSindhiScript(hh.head_name)) && entry.english) upd.head_name = entry.english
+      }
+
+      // Father name (same flow, separate Sindhi key)
+      const fKey = (hh as any).head_father_name_sindhi?.trim() || (hh as any).head_father_name?.trim()
+      const fEntry = fKey ? lookup.get(fKey) : null
+      if (fEntry) {
+        if (!(hh as any).head_father_name_sindhi?.trim() && isSindhiScript(fKey)) upd.head_father_name_sindhi = fKey
+        if (!(hh as any).head_father_name_hindi?.trim() && fEntry.hindi) upd.head_father_name_hindi = fEntry.hindi
+        if ((!(hh as any).head_father_name?.trim() || isSindhiScript((hh as any).head_father_name)) && fEntry.english) upd.head_father_name = fEntry.english
+      }
 
       if (Object.keys(upd).length > 0) {
         const { error } = await (supabase.from('households') as any).update(upd).eq('id', hh.id)
@@ -516,35 +524,46 @@ export async function syncFromDatabase(): Promise<{
     const pendingBackfill: BackfillTarget[] = []
 
     // Households: select all name + translation columns to detect blanks in one pass
-    const { data: households, error: hhErr } = await supabase
+    const { data: households, error: hhErr } = await (supabase
       .from('households')
-      .select('id, head_name, head_name_sindhi, head_name_hindi')
+      .select('id, head_name, head_name_sindhi, head_name_hindi, head_father_name, head_father_name_sindhi, head_father_name_hindi')) as { data: any[] | null; error: any }
 
     if (hhErr) return { ...empty, errors: [`Households query error: ${hhErr.message}`] }
 
-    for (const hh of households ?? []) {
-      // Use whatever name is available — English or Sindhi, no script filter
-      const key = hh.head_name_sindhi?.trim() || hh.head_name?.trim()
-      if (!key) continue
-
+    const addWord = (key: string) => {
       if (!alreadyIn.has(key)) {
         alreadyIn.add(key)
         toInsert.push({
           sindhi_word:  key,
-          // If already English, pre-fill english_word so AI convert is not needed
           english_word: isSindhiScript(key) ? null : key,
           hindi_word:   null,
           category: 'name',
         })
       }
+    }
 
-      // Track which fields are blank — backfill will fill these
-      const blanks: string[] = []
-      if (!hh.head_name_sindhi?.trim())  blanks.push('head_name_sindhi')
-      if (!hh.head_name_hindi?.trim())   blanks.push('head_name_hindi')
-      // head_name needs update only if blank or still in Sindhi script
-      if (!hh.head_name?.trim() || isSindhiScript(hh.head_name)) blanks.push('head_name')
-      if (blanks.length) pendingBackfill.push({ table: 'households', id: hh.id, sindhi_name: key, blank_fields: blanks })
+    for (const hh of households ?? []) {
+      // Head name
+      const key = (hh as any).head_name_sindhi?.trim() || hh.head_name?.trim()
+      if (key) {
+        addWord(key)
+        const blanks: string[] = []
+        if (!(hh as any).head_name_sindhi?.trim())  blanks.push('head_name_sindhi')
+        if (!(hh as any).head_name_hindi?.trim())   blanks.push('head_name_hindi')
+        if (!hh.head_name?.trim() || isSindhiScript(hh.head_name)) blanks.push('head_name')
+        if (blanks.length) pendingBackfill.push({ table: 'households', id: hh.id, sindhi_name: key, blank_fields: blanks })
+      }
+
+      // Father name (separate Sindhi key → its own backfill target)
+      const fKey = (hh as any).head_father_name_sindhi?.trim() || (hh as any).head_father_name?.trim()
+      if (fKey) {
+        addWord(fKey)
+        const fBlanks: string[] = []
+        if (!(hh as any).head_father_name_sindhi?.trim())  fBlanks.push('head_father_name_sindhi')
+        if (!(hh as any).head_father_name_hindi?.trim())   fBlanks.push('head_father_name_hindi')
+        if (!(hh as any).head_father_name?.trim() || isSindhiScript((hh as any).head_father_name)) fBlanks.push('head_father_name')
+        if (fBlanks.length) pendingBackfill.push({ table: 'households', id: hh.id, sindhi_name: fKey, blank_fields: fBlanks })
+      }
     }
 
     // Sub castes — store all names regardless of script

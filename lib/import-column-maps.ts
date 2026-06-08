@@ -11,10 +11,10 @@ export interface FieldDef {
 }
 
 export const HOUSEHOLD_FIELDS: FieldDef[] = [
-  { key: 'ghar_number',      label: 'Ghar Number',         sindhi: 'گهر نمبر',        required: true  },
-  { key: 'head_name',        label: 'Head Name',           sindhi: 'نالو',             required: true  },
-  { key: 'head_gender',      label: 'Gender',              sindhi: 'صنف',              required: false },
-  { key: 'head_father_name', label: 'Father Name',         required: false },
+  { key: 'ghar_number',         label: 'Ghar Number',         sindhi: 'گهر نمبر',        required: true  },
+  { key: 'head_name_sindhi',    label: 'Head Name (Sindhi)',  sindhi: 'نالو',             required: true  },
+  { key: 'head_gender',         label: 'Gender',              sindhi: 'صنف',              required: false },
+  { key: 'head_father_name_sindhi', label: 'Father Name (Sindhi)', required: false },
   { key: 'dob_year',         label: 'Birth Year',          sindhi: 'جنم جي تاريخ',    required: false },
   { key: 'education',        label: 'Education',           sindhi: 'تعليم',            required: false },
   { key: 'profession',       label: 'Profession',          sindhi: 'ڪاروبار',          required: false },
@@ -31,7 +31,7 @@ export const HOUSEHOLD_FIELDS: FieldDef[] = [
 export const RELATED_FIELDS: FieldDef[] = [
   { key: 'ghar_number',   label: 'Ghar Number',    sindhi: 'گهر نمبر',       required: true  },
   { key: 'member_number', label: 'Member Number',  sindhi: 'ڀاتي نمبر',      required: false },
-  { key: 'name',          label: 'Name',           sindhi: 'پاتي جو نالو',   required: true  },
+  { key: 'name_sindhi',   label: 'Name (Sindhi)',  sindhi: 'پاتي جو نالو',   required: true  },
   { key: 'gender',        label: 'Gender',         sindhi: 'صنف',             required: false },
   { key: 'relation_code', label: 'Relation Code',  sindhi: 'رشتو',           required: true  },
   { key: 'dob_year',      label: 'Birth Year',     sindhi: 'جنم جي تاريخ',  required: false },
@@ -68,7 +68,7 @@ export const FIELDS_BY_TYPE: Record<ImportType, FieldDef[]> = {
 const HEADER_ALIASES: Record<string, string> = {
   // Household
   'گهر نمبر': 'ghar_number', 'ghar number': 'ghar_number', 'ghar_number': 'ghar_number', 'house no': 'ghar_number',
-  'نالو': 'head_name', 'head name': 'head_name', 'head_name': 'head_name', 'name': 'head_name',
+  'نالو': 'head_name_sindhi', 'head name': 'head_name_sindhi', 'head_name': 'head_name_sindhi', 'head_name_sindhi': 'head_name_sindhi', 'name': 'head_name_sindhi',
   'جنم جي تاريخ': 'dob_year', 'dob': 'dob_year', 'birth year': 'dob_year', 'dob_year': 'dob_year',
   'تعليم': 'education', 'education': 'education',
   'ڪاروبار': 'profession', 'profession': 'profession', 'business': 'profession',
@@ -81,11 +81,11 @@ const HEADER_ALIASES: Record<string, string> = {
   'curr_district': 'curr_district', 'current district': 'curr_district', 'curr district': 'curr_district', 'موجوده ضلعو': 'curr_district',
   'curr_country': 'curr_country', 'current country': 'curr_country', 'curr country': 'curr_country', 'موجوده ملڪ': 'curr_country',
   'صنف': 'head_gender', 'gender': 'head_gender', 'head_gender': 'head_gender',
-  'head_father_name': 'head_father_name', 'father name': 'head_father_name', 'father_name': 'head_father_name',
-  'والد': 'head_father_name', 'ولد': 'head_father_name', 'والد جو نالو': 'head_father_name', 'پيءُ': 'head_father_name', 'پيءَ جو نالو': 'head_father_name',
+  'head_father_name': 'head_father_name_sindhi', 'head_father_name_sindhi': 'head_father_name_sindhi', 'father name': 'head_father_name_sindhi', 'father_name': 'head_father_name_sindhi',
+  'والد': 'head_father_name_sindhi', 'ولد': 'head_father_name_sindhi', 'والد جو نالو': 'head_father_name_sindhi', 'پيءُ': 'head_father_name_sindhi', 'پيءَ جو نالو': 'head_father_name_sindhi',
   // Related
   'ڀاتي نمبر': 'member_number', 'member number': 'member_number', 'member_number': 'member_number',
-  'پاتي جو نالو': 'name', 'member name': 'name',
+  'پاتي جو نالو': 'name_sindhi', 'member name': 'name_sindhi', 'name_sindhi': 'name_sindhi',
   'رشتو': 'relation_code', 'relation': 'relation_code', 'relation_code': 'relation_code',
   'نُڪ': 'sub_caste', 'sub caste': 'sub_caste', 'sub_caste': 'sub_caste',
   // Sashan

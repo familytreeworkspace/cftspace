@@ -224,7 +224,7 @@ export async function getSubCasteTreeData(subCasteId: string) {
 
   // death_year is added by migration 009 — fall back gracefully if it isn't applied yet
   const hhCols = (death: boolean) =>
-    `id, ghar_number, head_name, head_gender, dob_year, ${death ? 'death_year, ' : ''}sub_caste_id, photo_url, head_father_name, is_virtual`
+    `id, ghar_number, head_name, head_name_sindhi, head_gender, dob_year, ${death ? 'death_year, ' : ''}sub_caste_id, photo_url, head_father_name, is_virtual`
 
   let { data: householdsRaw, error: hhErr } = await supabase
     .from('households').select(hhCols(true))
@@ -243,7 +243,7 @@ export async function getSubCasteTreeData(subCasteId: string) {
   const householdIds = households.map((h: any) => h.id as string)
 
   const mCols = (death: boolean) =>
-    `id, name, gender, relation_code, dob_year, ${death ? 'death_year, ' : ''}photo_url, sub_caste_id, household_id`
+    `id, name, name_sindhi, gender, relation_code, dob_year, ${death ? 'death_year, ' : ''}photo_url, sub_caste_id, household_id`
 
   let { data: allMembers, error: mErr } = await supabase
     .from('members').select(mCols(true))

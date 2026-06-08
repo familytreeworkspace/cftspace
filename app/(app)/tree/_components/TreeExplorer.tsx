@@ -52,7 +52,8 @@ export default function TreeExplorer({
         isVirtual:      (item.household as any).is_virtual ?? false,
         head: {
           id:            item.household.id,
-          name:          item.household.head_name,
+          // head_name (English) may be empty until Directory backfill runs — fall back to Sindhi
+          name:          item.household.head_name || (item.household as any).head_name_sindhi || '',
           gender:        item.household.head_gender as 'Male' | 'Female',
           relation_code: 'HEAD',
           dob_year:      item.household.dob_year,
@@ -64,7 +65,8 @@ export default function TreeExplorer({
         } as TreeMember,
         members: item.members.map(m => ({
           id:            m.id,
-          name:          m.name,
+          // name (English) may be empty until Directory backfill — fall back to Sindhi
+          name:          m.name || (m as any).name_sindhi || '',
           gender:        m.gender as 'Male' | 'Female',
           relation_code: m.relation_code,
           dob_year:      m.dob_year,
@@ -314,6 +316,7 @@ export default function TreeExplorer({
             crossLinks={visibleCrossLinks}
             subCasteId={selectedId!}
             positions={matchHhIds ? [] : positions}
+            searchTerm={search}
             onTreeUpdated={handleTreeUpdated}
           />
         )}

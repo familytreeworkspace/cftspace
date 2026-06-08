@@ -7,8 +7,8 @@ import { batchInsertIntoDirectory } from '@/app/actions/directory'
 // ---- Types ----
 export interface HouseholdRow {
   ghar_number: string
-  head_name: string
-  head_father_name?: string
+  head_name_sindhi: string
+  head_father_name_sindhi?: string
   head_gender?: string
   dob_year?: number | null
   education?: string
@@ -26,7 +26,7 @@ export interface HouseholdRow {
 export interface MemberRow {
   ghar_number: string
   member_number?: number | null
-  name: string
+  name_sindhi: string
   gender?: string
   relation_code: string
   dob_year?: number | null
@@ -84,16 +84,18 @@ export async function importHouseholds(
   const result: ImportResult = { success: 0, warnings: [], errors: [] }
 
   for (const row of rows) {
-    if (!row.ghar_number || !row.head_name) {
-      result.warnings.push(`Row skipped — missing ghar_number or head_name`)
+    if (!row.ghar_number || !row.head_name_sindhi) {
+      result.warnings.push(`Row skipped — missing ghar_number or head name`)
       continue
     }
 
     const { error } = await supabase.from('households').upsert({
       sub_caste_id:     subCasteId,
       ghar_number:      String(row.ghar_number).trim(),
-      head_name:        String(row.head_name).trim(),
-      head_father_name: row.head_father_name?.trim() || null,
+      // Source data is Sindhi → store in the *_sindhi columns. English (head_name) and
+      // Hindi are filled later by the Directory transliteration + backfill flow.
+      head_name_sindhi:        String(row.head_name_sindhi).trim(),
+      head_father_name_sindhi: row.head_father_name_sindhi?.trim() || null,
       head_gender:      parseGender(row.head_gender),
       dob_year:         parseYear(row.dob_year),
       education:        row.education?.trim() || null,
@@ -124,8 +126,11 @@ export async function importHouseholds(
       warning_rows: result.warnings.length,
     })
 
-    // Auto-insert head names into Directory
-    const names = rows.map(r => r.head_name).filter(Boolean) as string[]
+    // Auto-insert head + father names (Sindhi) into Directory for later translation
+    const names = [
+      ...rows.map(r => r.head_name_sindhi),
+      ...rows.map(r => r.head_father_name_sindhi),
+    ].filter(Boolean) as string[]
     await batchInsertIntoDirectory(names, 'name')
   }
 
@@ -156,31 +161,32 @@ export async function importMembers(
   }
 
   for (const row of rows) {
-    if (!row.ghar_number || !row.name) {
+    if (!row.ghar_number || !row.name_sindhi) {
       result.warnings.push(`Row skipped — missing ghar_number or name`)
       continue
     }
 
     const householdId = gharMap.get(String(row.ghar_number).trim())
     if (!householdId) {
-      result.warnings.push(`Ghar ${row.ghar_number} not found — member "${row.name}" skipped`)
+      result.warnings.push(`Ghar ${row.ghar_number} not found — member "${row.name_sindhi}" skipped`)
       continue
     }
 
     const { error } = await supabase.from('members').insert({
       household_id:  householdId,
       member_number: row.member_number ? Number(row.member_number) : null,
-      name:          String(row.name).trim(),
+      // Source is Sindhi → store in name_sindhi; name (English) + name_hindi filled by Directory backfill
+      name_sindhi:   String(row.name_sindhi).trim(),
       gender:        parseGender(row.gender),
       relation_code: String(row.relation_code).trim(),
       dob_year:      parseYear(row.dob_year),
       education:     row.education?.trim() || null,
       profession:    row.profession?.trim() || null,
       sub_caste_id:  subCasteId,
-    })
+    } as any)
 
     if (error) {
-      result.errors.push(`Member "${row.name}" (Ghar ${row.ghar_number}): ${error.message}`)
+      result.errors.push(`Member "${row.name_sindhi}" (Ghar ${row.ghar_number}): ${error.message}`)
     } else {
       result.success++
     }
@@ -195,8 +201,8 @@ export async function importMembers(
       warning_rows: result.warnings.length,
     })
 
-    // Auto-insert member names into Directory
-    const names = rows.map(r => r.name).filter(Boolean) as string[]
+    // Auto-insert member names (Sindhi) into Directory for later translation
+    const names = rows.map(r => r.name_sindhi).filter(Boolean) as string[]
     await batchInsertIntoDirectory(names, 'name')
   }
 

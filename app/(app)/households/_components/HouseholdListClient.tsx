@@ -39,7 +39,7 @@ export default function HouseholdListClient({
     const matchSC = selectedSC === 'all' || h.sub_caste_id === selectedSC
     const matchSearch =
       !search ||
-      h.head_name.toLowerCase().includes(search.toLowerCase()) ||
+      (h.head_name ?? (h as any).head_name_sindhi ?? '').toLowerCase().includes(search.toLowerCase()) ||
       h.ghar_number.toLowerCase().includes(search.toLowerCase()) ||
       (h.current_address ?? '').toLowerCase().includes(search.toLowerCase())
     return matchSC && matchSearch
