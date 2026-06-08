@@ -43,8 +43,8 @@
   --color-sidebar-border:          var(--sidebar-border);
   --color-sidebar-ring:            var(--sidebar-ring);
 
-  --font-display: var(--font-lora), Georgia, serif;
-  --font-serif:   var(--font-lora), Georgia, serif;
+  --font-display: var(--font-lora), var(--font-mb-sindhi), Georgia, serif;
+  --font-serif:   var(--font-lora), var(--font-mb-sindhi), Georgia, serif;
   --font-sans:    var(--font-inter), system-ui, sans-serif;
 }
 
@@ -134,7 +134,7 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: var(--font-sans), var(--font-mb-sindhi), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 0.9375rem;
     line-height: 1.5;
     font-weight: 400;
@@ -142,7 +142,7 @@
     -moz-osx-font-smoothing: grayscale;
   }
   html[dir="rtl"] body {
-    font-family: var(--font-amiri), "Amiri", Georgia, serif;
+    font-family: var(--font-mb-sindhi), var(--font-amiri), "Amiri", Georgia, serif;
     line-height: 1.7;
   }
   h1, h2, h3, h4, h5, h6 {
@@ -157,7 +157,7 @@
   html[dir="rtl"] h4,
   html[dir="rtl"] h5,
   html[dir="rtl"] h6 {
-    font-family: var(--font-amiri), "Amiri", Georgia, serif;
+    font-family: var(--font-mb-sindhi), var(--font-amiri), "Amiri", Georgia, serif;
   }
   button, [role="button"] {
     font-weight: 500;
@@ -175,9 +175,9 @@
               0 8px 24px -12px color-mix(in oklab, var(--color-primary) 20%, transparent);
 }
 
-/* Sindhi RTL font */
+/* Sindhi — MB Sindhi web font, fallback to Amiri */
 :lang(sd) {
-  font-family: var(--font-display);
+  font-family: var(--font-mb-sindhi), var(--font-amiri), "Amiri", Georgia, serif;
   line-height: 2;
 }
 

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Inter, Lora, Amiri } from 'next/font/google'
+import localFont from 'next/font/local'
 import { NextIntlClientProvider } from 'next-intl'
 import { getLocale, getMessages } from 'next-intl/server'
 import './globals.css'
@@ -23,6 +24,12 @@ const amiri = Amiri({
   variable: '--font-amiri',
   subsets: ['arabic', 'latin'],
   weight: ['400', '700'],
+  display: 'swap',
+})
+
+const mbSindhi = localFont({
+  src: '../public/fonts/mbsindhiweb.otf',
+  variable: '--font-mb-sindhi',
   display: 'swap',
 })
 
@@ -64,7 +71,7 @@ export default async function RootLayout({
     <html
       lang={locale}
       dir={isRTL ? 'rtl' : 'ltr'}
-      className={`${inter.variable} ${lora.variable} ${amiri.variable} h-full antialiased`}
+      className={`${inter.variable} ${lora.variable} ${amiri.variable} ${mbSindhi.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <TitleMarquee />
