@@ -277,8 +277,8 @@ export default function TreeExplorer({
 
       {/* ── Mobile Search Overlay (top-center, semi-transparent) ── */}
       {mobileSearchOpen && selectedId && allTrees.length > 0 && (
-        <div className="sm:hidden absolute top-2 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-sm">
-          <div className="relative bg-white/85 backdrop-blur-sm border border-gray-200 rounded-xl shadow-lg px-2 py-2">
+        <div className="sm:hidden absolute top-16 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-sm">
+          <div className="relative bg-white/60 backdrop-blur-sm border border-gray-200 rounded-xl shadow-lg px-2 py-2">
             <div className="relative">
               <input
                 type="text"
