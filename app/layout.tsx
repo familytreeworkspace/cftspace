@@ -28,7 +28,7 @@ const amiri = Amiri({
 })
 
 const mbSindhi = localFont({
-  src: '../public/fonts/mbsindhiweb.otf',
+  src: '../public/fonts/mbsindhiweb.woff2',
   variable: '--font-mb-sindhi',
   display: 'swap',
 })

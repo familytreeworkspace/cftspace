@@ -43,9 +43,9 @@
   --color-sidebar-border:          var(--sidebar-border);
   --color-sidebar-ring:            var(--sidebar-ring);
 
-  --font-display: var(--font-lora), var(--font-amiri), Georgia, serif;
-  --font-serif:   var(--font-lora), var(--font-amiri), Georgia, serif;
-  --font-sans:    var(--font-inter), var(--font-amiri), system-ui, sans-serif;
+  --font-display: var(--font-lora), var(--font-mb-sindhi), Georgia, serif;
+  --font-serif:   var(--font-lora), var(--font-mb-sindhi), Georgia, serif;
+  --font-sans:    var(--font-inter), "MBSindhiScript", system-ui, sans-serif;
 }
 
 :root {
@@ -134,7 +134,7 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-family: var(--font-inter), var(--font-amiri), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: var(--font-inter), "MBSindhiScript", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 0.9375rem;
     line-height: 1.5;
     font-weight: 400;
@@ -142,7 +142,7 @@
     -moz-osx-font-smoothing: grayscale;
   }
   html[dir="rtl"] body {
-    font-family: var(--font-amiri), "Amiri", Georgia, serif;
+    font-family: var(--font-mb-sindhi), var(--font-amiri), "Amiri", Georgia, serif;
     line-height: 1.7;
   }
   h1, h2, h3, h4, h5, h6 {
@@ -157,7 +157,7 @@
   html[dir="rtl"] h4,
   html[dir="rtl"] h5,
   html[dir="rtl"] h6 {
-    font-family: var(--font-amiri), "Amiri", Georgia, serif;
+    font-family: var(--font-mb-sindhi), var(--font-amiri), "Amiri", Georgia, serif;
   }
   button, [role="button"] {
     font-weight: 500;
@@ -175,10 +175,23 @@
               0 8px 24px -12px color-mix(in oklab, var(--color-primary) 20%, transparent);
 }
 
-/* Sindhi — Amiri primary font for Arabic/Sindhi script */
+/* Sindhi mode — MB Sindhi Script as primary */
 :lang(sd) {
-  font-family: var(--font-amiri), "Amiri", Georgia, serif;
+  font-family: var(--font-mb-sindhi), var(--font-amiri), "Amiri", Georgia, serif;
   line-height: 2;
+}
+
+/* MB Sindhi Script — force for Arabic/Sindhi characters in any language mode.
+   WOFF2 source, unicode-range ensures only Arabic/Sindhi codepoints use this font. */
+@font-face {
+  font-family: "MBSindhiScript";
+  src: url("/fonts/mbsindhiweb.woff2") format("woff2");
+  unicode-range:
+    U+0600-U+06FF,
+    U+0750-U+077F,
+    U+FB50-U+FDFF,
+    U+FE70-U+FEFF;
+  font-display: swap;
 }
 
 
