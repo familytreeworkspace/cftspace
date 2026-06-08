@@ -94,19 +94,34 @@ export default function TreeExplorer({
 
   const selectedSC = subCastes.find(s => s.id === selectedId)
 
-  const filteredTrees = search.trim()
-    ? (() => {
-        const q = search.trim().toLowerCase()
-        return allTrees.filter(t =>
+  // Households that directly match the search text
+  const matchHhIds = (() => {
+    if (!search.trim()) return null
+    const q = search.trim().toLowerCase()
+    return new Set(
+      allTrees
+        .filter(t =>
           t.head.name.toLowerCase().includes(q) ||
-          t.gharNumber.includes(q) ||
+          t.gharNumber.toLowerCase().includes(q) ||
           t.members.some(m => m.name.toLowerCase().includes(q))
         )
-      })()
+        .map(t => t.householdId)
+    )
+  })()
+
+  // Show only the matching families. Keep cross-links that stay WITHIN the matched set so a
+  // matched child still renders (as its own root) instead of vanishing with its missing parent.
+  const filteredTrees = matchHhIds
+    ? allTrees.filter(t => matchHhIds.has(t.householdId))
     : allTrees
 
+  const visibleHhIds = new Set(filteredTrees.map(t => t.householdId))
+  const visibleCrossLinks = matchHhIds
+    ? crossLinks.filter(cl => visibleHhIds.has(cl.child_household_id) && visibleHhIds.has(cl.parent_household_id))
+    : crossLinks
+
   const totalHouseholds = allTrees.filter(t => !t.isVirtual).length
-  const matchCount = search.trim() ? filteredTrees.filter(t => !t.isVirtual).length : null
+  const matchCount = matchHhIds ? matchHhIds.size : null
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
@@ -127,20 +142,17 @@ export default function TreeExplorer({
 
         <div className="w-px h-8 bg-gray-200 flex-shrink-0" />
 
-        {/* Sub Caste selector */}
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-500 flex-shrink-0">Sub Caste</label>
-          <select
-            value={selectedId ?? ''}
-            onChange={e => e.target.value && loadSubCaste(e.target.value)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-800 outline-none focus:ring-2 focus:ring-blue-400 min-w-[160px]"
-          >
-            <option value="">— Select —</option>
-            {subCastes.map(sc => (
-              <option key={sc.id} value={sc.id}>{sc.name}</option>
-            ))}
-          </select>
-        </div>
+        {/* Sub Caste selector — placeholder shown inside the dropdown, no separate label */}
+        <select
+          value={selectedId ?? ''}
+          onChange={e => e.target.value && loadSubCaste(e.target.value)}
+          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-800 outline-none focus:ring-2 focus:ring-blue-400 min-w-[140px] flex-shrink-0"
+        >
+          <option value="">Sub Caste</option>
+          {subCastes.map(sc => (
+            <option key={sc.id} value={sc.id}>{sc.name}</option>
+          ))}
+        </select>
 
         {/* Search */}
         {selectedId && allTrees.length > 0 && (
@@ -299,9 +311,9 @@ export default function TreeExplorer({
           <TreeCanvas
             allTrees={filteredTrees}
             canEdit={canEdit}
-            crossLinks={crossLinks}
+            crossLinks={visibleCrossLinks}
             subCasteId={selectedId!}
-            positions={positions}
+            positions={matchHhIds ? [] : positions}
             onTreeUpdated={handleTreeUpdated}
           />
         )}
