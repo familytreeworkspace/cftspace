@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { login } from '@/app/actions/auth'
+import InstallAppButton from './InstallAppButton'
 
 const translations = {
   'auth.platform': ' ',
@@ -94,6 +95,9 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
+
+        {/* Install as App (Android / Desktop / iOS) */}
+        <InstallAppButton />
 
         <p className="text-center text-blue-300 text-xs mt-6">
           {t('auth.contactAdmin')}
