@@ -11,6 +11,11 @@ export interface TreeMember {
   sub_caste_id: string | null
   household_id: string
   is_head?: boolean
+  // Marriage / maiden links (migration 014)
+  father_household_id?: string | null    // WIFE → her maika household
+  mother_member_id?: string | null
+  married_household_id?: string | null   // DAUGHTER → her sasural household
+  maiden_external?: boolean
 }
 
 export interface FamilyLink {

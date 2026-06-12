@@ -13,6 +13,8 @@ import { FamilyTreeNode, type FamilyNodeData } from './FamilyTreeNode'
 import { FamilyEdge, SpouseEdge } from './FamilyEdge'
 import { LinkConfirmModal } from './LinkConfirmModal'
 import { AddAncestorModal } from './AddAncestorModal'
+import MarriageModal, { type MarriageLinkTarget } from './MarriageModal'
+import MarriageInfoPopup, { type MarriageInfoTarget } from './MarriageInfoPopup'
 import { createHouseholdLink, linkMembers, removeHouseholdLink, setDeathYear, saveNodePosition, resetTreeLayout } from '@/app/actions/tree'
 import type { HouseholdTree, CrossHouseholdLink } from './types'
 import type { AncestorTrigger } from './MemberFlowNode'
@@ -68,6 +70,7 @@ interface Props {
   canEdit:       boolean
   crossLinks:    CrossHouseholdLink[]
   subCasteId:    string
+  subCastes:     { id: string; name: string }[]
   positions:     { node_id: string; x: number; y: number }[]
   searchTerm?:   string
   onTreeUpdated: () => void
@@ -245,6 +248,9 @@ function buildFlowElements(
   ancestorRelation: Map<string, string>,
   onMarkDeath: (id: string, isHead: boolean, year: number | null) => void,
   searchTerm: string,
+  subCasteId: string,
+  onMarriageLink: (memberId: string, householdId: string, mode: 'maika' | 'sasural', subCasteId: string) => void,
+  onMarriageInfo: (memberId: string, mode: 'maika' | 'sasural') => void,
 ): { nodes: Node[]; edges: Edge[]; coupleJunctions: { jxnId: string; headId: string; wifeId: string }[] } {
 
   const q = searchTerm.trim().toLowerCase()
@@ -258,7 +264,7 @@ function buildFlowElements(
 
   function addFamilyNode(
     id: string, x: number, y: number,
-    person: { name: string; gender: string; dob_year: number | null; death_year?: number | null; photo_url: string | null; relation_code?: string },
+    person: { name: string; gender: string; dob_year: number | null; death_year?: number | null; photo_url: string | null; relation_code?: string; father_household_id?: string | null; married_household_id?: string | null; maiden_external?: boolean },
     isHead: boolean, hhId: string, isRoot: boolean,
   ) {
     if (seenNodes.has(id)) return
@@ -284,9 +290,15 @@ function buildFlowElements(
         highlight: !!q && (person.name ?? '').toLowerCase().includes(q),
         isLinkedChild: isHead && linkedChildHhIds.has(hhId),
         householdId: hhId,
+        subCasteId,
+        fatherHouseholdId:  person.father_household_id ?? null,
+        marriedHouseholdId: person.married_household_id ?? null,
+        maidenExternal:     person.maiden_external ?? false,
         onAddRelative,
         onUnlink,
         onMarkDeath,
+        onMarriageLink,
+        onMarriageInfo,
       } as FamilyNodeData,
     })
   }
@@ -400,13 +412,15 @@ function buildFlowElements(
 }
 
 // ── Main component ────────────────────────────────────────────
-export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, positions, searchTerm = '', onTreeUpdated }: Props) {
+export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, subCastes, positions, searchTerm = '', onTreeUpdated }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [graphicMode, setGraphicMode]   = useState(false)
   const [linkMode, setLinkMode]         = useState(false)
   const [pendingLink, setPendingLink]   = useState<PendingLink | null>(null)
   const [ancestorTrigger, setAncestorTrigger] = useState<AncestorTrigger | null>(null)
+  const [marriageLink, setMarriageLink] = useState<MarriageLinkTarget | null>(null)
+  const [marriageInfo, setMarriageInfo] = useState<MarriageInfoTarget | null>(null)
   const [actionError, setActionError]   = useState('')
 
   const nhMap    = useRef<Map<string, string>>(new Map())
@@ -446,6 +460,20 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, 
     onTreeUpdated()
   }, [onTreeUpdated])
 
+  const handleMarriageLink = useCallback((memberId: string, householdId: string, mode: 'maika' | 'sasural', scId: string) => {
+    setMarriageLink({
+      memberId,
+      memberName: nnMap.current.get(memberId) ?? 'Member',
+      householdId,
+      mode,
+      subCasteId: scId || subCasteId,
+    })
+  }, [subCasteId])
+
+  const handleMarriageInfo = useCallback((memberId: string, mode: 'maika' | 'sasural') => {
+    setMarriageInfo({ memberId, memberName: nnMap.current.get(memberId) ?? 'Member', mode })
+  }, [])
+
   const handleResetLayout = useCallback(async () => {
     setActionError('')
     savedPos.current = new Map()
@@ -474,7 +502,8 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, 
       if (virtualHhIds.has(cl.parent_household_id)) ancestorRelation.set(cl.parent_household_id, cl.relation)
     })
     const { nodes: newNodes, edges: newEdges, coupleJunctions } = buildFlowElements(
-      roots, graphicMode, canEdit, linkMode, handleAddRelative, linkedChildHhIds, handleUnlink, ancestorRelation, handleMarkDeath, searchTerm
+      roots, graphicMode, canEdit, linkMode, handleAddRelative, linkedChildHhIds, handleUnlink, ancestorRelation, handleMarkDeath, searchTerm,
+      subCasteId, handleMarriageLink, handleMarriageInfo,
     )
 
     // Restore positions — in-session drags first, then positions saved in the DB
@@ -517,7 +546,7 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, 
       lastSigRef.current = sig
       setTimeout(() => rfInstance.current?.fitView({ padding: 0.2, maxZoom: 1.2, duration: 400 }), 60)
     }
-  }, [allTrees, crossLinks, positions, searchTerm, graphicMode, canEdit, linkMode, handleAddRelative, handleUnlink, handleMarkDeath, setNodes, setEdges])
+  }, [allTrees, crossLinks, positions, searchTerm, graphicMode, canEdit, linkMode, subCasteId, handleAddRelative, handleUnlink, handleMarkDeath, handleMarriageLink, handleMarriageInfo, setNodes, setEdges])
 
   // New sub caste → drop any in-session drag overrides so DB positions take effect
   useEffect(() => { savedPos.current = new Map() }, [subCasteId])
@@ -719,6 +748,22 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, 
           info={ancestorTrigger}
           onCreated={() => { setAncestorTrigger(null); onTreeUpdated() }}
           onCancel={() => setAncestorTrigger(null)}
+        />
+      )}
+
+      {marriageLink && (
+        <MarriageModal
+          target={marriageLink}
+          subCastes={subCastes}
+          onDone={() => { setMarriageLink(null); onTreeUpdated() }}
+          onCancel={() => setMarriageLink(null)}
+        />
+      )}
+
+      {marriageInfo && (
+        <MarriageInfoPopup
+          target={marriageInfo}
+          onClose={() => setMarriageInfo(null)}
         />
       )}
     </div>

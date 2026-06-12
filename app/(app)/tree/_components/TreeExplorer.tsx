@@ -90,6 +90,10 @@ export default function TreeExplorer({
           photo_url:     m.photo_url,
           sub_caste_id:  m.sub_caste_id,
           household_id:  m.household_id,
+          father_household_id:  (m as any).father_household_id ?? null,
+          mother_member_id:     (m as any).mother_member_id ?? null,
+          married_household_id: (m as any).married_household_id ?? null,
+          maiden_external:      (m as any).maiden_external ?? false,
         }) as TreeMember),
         links: item.links.map(l => ({
           id:        l.id,
@@ -373,6 +377,7 @@ export default function TreeExplorer({
             canEdit={canEdit}
             crossLinks={visibleCrossLinks}
             subCasteId={selectedId!}
+            subCastes={subCastes}
             positions={matchHhIds ? [] : positions}
             searchTerm={search}
             onTreeUpdated={handleTreeUpdated}

@@ -19,9 +19,16 @@ export type FamilyNodeData = {
   highlight?: boolean       // matched by the current search → orange highlight
   isLinkedChild?: boolean   // this household is linked under a parent household
   householdId: string
+  // Marriage / maiden links (migration 014)
+  subCasteId?: string | null
+  fatherHouseholdId?: string | null    // WIFE → maika linked
+  marriedHouseholdId?: string | null   // DAUGHTER → sasural linked
+  maidenExternal?: boolean
   onAddRelative: (nodeId: string, position: 'top' | 'bottom') => void
   onUnlink?: (householdId: string) => void
   onMarkDeath?: (id: string, isHead: boolean, year: number | null) => void
+  onMarriageLink?: (memberId: string, householdId: string, mode: 'maika' | 'sasural', subCasteId: string) => void
+  onMarriageInfo?: (memberId: string, mode: 'maika' | 'sasural') => void
 }
 
 const MALE_BG   = '#eff6ff'   // blue-50
@@ -124,6 +131,29 @@ export const FamilyTreeNode = memo(function FamilyTreeNode({ data, selected }: N
   const bor = isDeceased ? DEAD_BOR : d.gender === 'Female' ? FEM_BOR : MALE_BOR
   const active = selected || d.highlight   // orange highlight on select OR search match
   const symbolSize = 22
+
+  // ── Marriage chip ── a WIFE points to her maika, a DAUGHTER to her sasural.
+  // Linked → subtle clickable chip (everyone). Unlinked → amber "pending" chip (admin only).
+  const isWifeCard     = d.relationLabel === 'Wife'
+  const isDaughterCard = d.relationLabel === 'Daughter'
+  const maidenLinked   = !!d.fatherHouseholdId || !!d.maidenExternal
+  const marriedLinked  = !!d.marriedHouseholdId
+
+  let chip: { label: string; mode: 'maika' | 'sasural'; pending: boolean; cls: string } | null = null
+  if (isWifeCard) {
+    if (maidenLinked)   chip = { label: '👪 Parents',  mode: 'maika',   pending: false, cls: 'bg-blue-50 text-blue-600 border-blue-200' }
+    else if (d.canEdit) chip = { label: '🔗 Link maika', mode: 'maika', pending: true,  cls: 'bg-amber-100 text-amber-700 border-amber-300' }
+  } else if (isDaughterCard) {
+    if (marriedLinked)  chip = { label: '💍 In-laws',  mode: 'sasural', pending: false, cls: 'bg-pink-50 text-pink-600 border-pink-200' }
+    else if (d.canEdit) chip = { label: '🔗 Link sasural', mode: 'sasural', pending: true, cls: 'bg-amber-100 text-amber-700 border-amber-300' }
+  }
+
+  function handleChip(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!chip) return
+    if (chip.pending) d.onMarriageLink?.(d.id, d.householdId, chip.mode, d.subCasteId ?? '')
+    else              d.onMarriageInfo?.(d.id, chip.mode)
+  }
 
   function handleAdd(nodeId: string, pos: 'top' | 'bottom', type: string) {
     setTopMenu(false)
@@ -242,6 +272,25 @@ export const FamilyTreeNode = memo(function FamilyTreeNode({ data, selected }: N
           </div>
         </div>
       </div>
+
+      {/* Marriage chip — maika (wife) / sasural (daughter) link or pending nishaan */}
+      {chip && (
+        <button
+          onClick={handleChip}
+          title={chip.pending
+            ? (chip.mode === 'maika' ? 'Link her father\'s family' : 'Link her husband\'s family')
+            : 'View family detail'}
+          className={[
+            'nodrag absolute left-1/2 -translate-x-1/2 z-30 whitespace-nowrap',
+            'text-[8px] font-semibold px-1.5 py-0.5 rounded-full border shadow-sm transition-colors',
+            chip.cls,
+            chip.pending ? 'animate-pulse' : '',
+          ].join(' ')}
+          style={{ top: 'calc(100% + 1px)' }}
+        >
+          {chip.label}
+        </button>
+      )}
 
       {/* Bottom — parent-child source */}
       <Handle

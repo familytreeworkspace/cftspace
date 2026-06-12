@@ -89,6 +89,11 @@ export interface Database {
           dob_year: number | null; dob_full: string | null
           education: string | null; profession: string | null
           sub_caste_id: string | null; photo_url: string | null
+          father_household_id: string | null; mother_member_id: string | null
+          married_household_id: string | null
+          maiden_external: boolean
+          maiden_father_name: string | null; maiden_mother_name: string | null
+          maiden_sub_caste: string | null; maiden_address: string | null
           created_at: string; updated_at: string
         }
         Insert: {
@@ -98,6 +103,11 @@ export interface Database {
           dob_year?: number | null; dob_full?: string | null
           education?: string | null; profession?: string | null
           sub_caste_id?: string | null; photo_url?: string | null
+          father_household_id?: string | null; mother_member_id?: string | null
+          married_household_id?: string | null
+          maiden_external?: boolean
+          maiden_father_name?: string | null; maiden_mother_name?: string | null
+          maiden_sub_caste?: string | null; maiden_address?: string | null
         }
         Update: {
           id?: string; household_id?: string; member_number?: number | null
@@ -106,6 +116,11 @@ export interface Database {
           dob_year?: number | null; dob_full?: string | null
           education?: string | null; profession?: string | null
           sub_caste_id?: string | null; photo_url?: string | null
+          father_household_id?: string | null; mother_member_id?: string | null
+          married_household_id?: string | null
+          maiden_external?: boolean
+          maiden_father_name?: string | null; maiden_mother_name?: string | null
+          maiden_sub_caste?: string | null; maiden_address?: string | null
         }
         Relationships: []
       }

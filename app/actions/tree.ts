@@ -262,6 +262,13 @@ export async function getSubCasteTreeData(subCasteId: string) {
     .select('id, member_id, father_id, mother_id, spouse_id, link_type')
     .in('member_id', allMemberIds)
 
+  // Marriage / maiden link fields (columns added by migration 014 — ignore if not applied yet)
+  const { data: marriageRows } = await (supabase as any)
+    .from('members')
+    .select('id, father_household_id, mother_member_id, married_household_id, maiden_external')
+    .in('household_id', householdIds)
+  const marriageMap = new Map<string, any>((marriageRows ?? []).map((r: any) => [r.id, r]))
+
   // Cross-household links (table added by migration 007, cast as any)
   const { data: crossLinksData } = await (supabase as any)
     .from('household_links')
@@ -275,7 +282,9 @@ export async function getSubCasteTreeData(subCasteId: string) {
     .eq('sub_caste_id', subCasteId)
 
   const trees = households.map((h: any) => {
-    const members = (allMembers ?? []).filter(m => m.household_id === h.id)
+    const members = (allMembers ?? [])
+      .filter(m => m.household_id === h.id)
+      .map(m => ({ ...m, ...(marriageMap.get(m.id) ?? {}) }))
     const hMemberIds = new Set([h.id, ...members.map(m => m.id)])
     const links = (allLinks ?? []).filter(l => hMemberIds.has(l.member_id))
     return { household: h, members, links }
