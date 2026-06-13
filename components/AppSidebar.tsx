@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl'
 import {
   LayoutDashboard, Users, Network, Upload,
   FileBarChart, UserCog, BookOpen, Inbox,
-  TreePine, X, Layers, Crown,
+  TreePine, X, Layers, Crown, FileSpreadsheet,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -25,6 +25,7 @@ export default function AppSidebar({
     { href: '/households', icon: Users,            label: t('households') },
     { href: '/tree',       icon: Network,          label: t('tree') },
     { href: '/import',     icon: Upload,           label: t('import') },
+    { href: '/convert',    icon: FileSpreadsheet,  label: 'Chart Convert' },
     { href: '/reports',    icon: FileBarChart,     label: t('reports') },
   ]
 
