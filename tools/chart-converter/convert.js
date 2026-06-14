@@ -79,6 +79,9 @@ const maxRow = grid.length
 const maxCol = grid.reduce((m, r) => Math.max(m, r.length), 0)
 const cell = (r, c) => (grid[r] && grid[r][c] != null ? grid[r][c] : '')
 
+// Address = the title/origin text in the top-left corner (column A), e.g. "MAKWANA SENHAR".
+const ADDRESS = grid.map(r => (r[0] || '').trim()).filter(Boolean).join(' ')
+
 // ── 2. Classify cells → names (with their annotation lines) ─────────────────
 // Per column, top→bottom. A name "owns" the consecutive text rows directly below
 // it (its annotation lines) until a connector / blank breaks the run.
@@ -216,6 +219,7 @@ for (const head of households) {
     head_name:   head.name,
     head_gender: isFemale(head.name) ? 'Female' : 'Male',
     sub_caste:   SUB_CASTE,
+    address:     ADDRESS,
     review:      [head._orphanHead ? 'DISCONNECTED' : '', isFemale(head.name) ? 'FEMALE-HEAD' : '']
                   .filter(Boolean).join(' '),
   })
@@ -321,7 +325,7 @@ function writeSheet(rows, headers, file, sheetName) {
 
 writeSheet(
   householdRows,
-  ['ghar_number', 'head_name', 'head_gender', 'sub_caste', 'review'],
+  ['ghar_number', 'head_name', 'head_gender', 'sub_caste', 'address', 'review'],
   'household.xlsx', 'household',
 )
 writeSheet(

@@ -11,6 +11,7 @@ export interface HouseholdRow {
   head_name: string
   head_gender: 'Male' | 'Female'
   sub_caste: string
+  address: string
   review: string
 }
 export interface MemberRow {
@@ -91,6 +92,10 @@ export function parseChart(grid: string[][], subCaste: string): ConvertResult {
   const maxRow = grid.length
   const maxCol = grid.reduce((m, r) => Math.max(m, r.length), 0)
   const cell = (r: number, c: number) => (grid[r] && grid[r][c] != null ? grid[r][c] : '')
+
+  // Address = the title/origin text in the top-left corner (column A), e.g. "MAKWANA SENHAR".
+  // Every household in this file gets this same address.
+  const address = grid.map(r => (r[0] || '').trim()).filter(Boolean).join(' ')
 
   // ── 1. Classify cells → names (with their annotation lines) ──────────────
   const names: Node[] = []
@@ -198,6 +203,7 @@ export function parseChart(grid: string[][], subCaste: string): ConvertResult {
       head_name: head.name,
       head_gender: isFemale(head.name) ? 'Female' : 'Male',
       sub_caste: subCaste,
+      address,
       review: [head._orphanHead ? 'DISCONNECTED' : '', isFemale(head.name) ? 'FEMALE-HEAD' : '']
         .filter(Boolean).join(' '),
     })
