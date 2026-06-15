@@ -60,14 +60,19 @@ interface Node {
   _orphanHead?: boolean
 }
 
-// A cell is a "line" (connector) when it is made up ONLY of pipe-type marks and spaces.
-// Covers "|", "!", and any multi-pipe variant the charts use: "||", "| |", "|||", "| | |".
-// A lone "I" / "l" / "1" is almost always a mistyped pipe (it sits exactly where a vertical
-// line belongs), so those count too. Anything with a real letter/word is a name, not a line.
-const CONNECTOR_RE = /^[|!Il1]+$/
+// A cell is a "line" (connector / decorative mark), NOT a name, when it carries no
+// actual letters. This covers the lineage line in all its forms — "|", "!", multi-pipe
+// "||" / "| |" / "|\n|", the common mistyped pipes "I" / "l" / "1" — and the stray
+// brace / dot / dash marks some hand-made charts use ("{", "}", ".", "-", "·"). Treating
+// these as lines (instead of names) stops a stray mark from swallowing the real name below
+// it, which used to break a sibling run and orphan everyone after the gap.
+// A cell with ANY letter (any script) is a real name/annotation, never a line.
+const PIPE_RE = /^[|!Il1]+$/
 const isConn = (v: string) => {
   const t = v.replace(/\s+/g, '')
-  return t.length > 0 && CONNECTOR_RE.test(t)
+  if (t === '') return false
+  if (PIPE_RE.test(t)) return true   // pipes + common mistyped pipes
+  return !/\p{L}/u.test(t)            // any other letterless cell = a line / decorative mark
 }
 
 function colName(i: number): string {

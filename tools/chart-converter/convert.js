@@ -35,11 +35,17 @@ const SUB_CASTE  = process.argv[3] || 'Makwana'
 const OUT_DIR    = path.join(__dirname, 'out')
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-// A cell is a "line" (connector) when it is made up ONLY of pipe-type marks and spaces.
-// Covers "|", "!", and any multi-pipe variant the charts use: "||", "| |", "|||", "| | |".
-// A lone "I" / "l" / "1" is almost always a mistyped pipe, so those count too.
-const CONNECTOR_RE = /^[|!Il1]+$/
-const isConn = v => { const t = String(v).replace(/\s+/g, ''); return t.length > 0 && CONNECTOR_RE.test(t) }
+// A cell is a "line" (connector / decorative mark), NOT a name, when it carries no actual
+// letters: the lineage line "|"/"!"/multi-pipe/"|\n|", the mistyped pipes "I"/"l"/"1", and
+// stray brace/dot/dash marks ("{", "}", ".", "-"). This stops a stray mark from swallowing
+// the real name below it (which used to break a sibling run and orphan everyone after it).
+const PIPE_RE = /^[|!Il1]+$/
+const isConn = v => {
+  const t = String(v).replace(/\s+/g, '')
+  if (t === '') return false
+  if (PIPE_RE.test(t)) return true   // pipes + common mistyped pipes
+  return !/\p{L}/u.test(t)            // any other letterless cell = a line / decorative mark
+}
 const colName = i => XLSX.utils.encode_col(i)
 
 // Female if name ends in a known female marker, or is the literal "GIRL".
