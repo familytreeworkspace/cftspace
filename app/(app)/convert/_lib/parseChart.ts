@@ -60,10 +60,15 @@ interface Node {
   _orphanHead?: boolean
 }
 
-// "|" and "!" are line cells. A lone "I" / "l" / "1" is almost always a mistyped
-// pipe (it sits exactly where a vertical line belongs), so treat it as a connector too.
-const CONNECTORS = new Set(['|', '!', 'I', 'l', '1'])
-const isConn = (v: string) => CONNECTORS.has(v)
+// A cell is a "line" (connector) when it is made up ONLY of pipe-type marks and spaces.
+// Covers "|", "!", and any multi-pipe variant the charts use: "||", "| |", "|||", "| | |".
+// A lone "I" / "l" / "1" is almost always a mistyped pipe (it sits exactly where a vertical
+// line belongs), so those count too. Anything with a real letter/word is a name, not a line.
+const CONNECTOR_RE = /^[|!Il1]+$/
+const isConn = (v: string) => {
+  const t = v.replace(/\s+/g, '')
+  return t.length > 0 && CONNECTOR_RE.test(t)
+}
 
 function colName(i: number): string {
   let s = ''

@@ -35,10 +35,11 @@ const SUB_CASTE  = process.argv[3] || 'Makwana'
 const OUT_DIR    = path.join(__dirname, 'out')
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-// "|" and "!" are line cells. A lone "I" / "l" / "1" is almost always a mistyped
-// pipe (it sits exactly where a vertical line belongs), so treat it as a connector too.
-const CONNECTORS = new Set(['|', '!', 'I', 'l', '1'])
-const isConn = v => CONNECTORS.has(v)
+// A cell is a "line" (connector) when it is made up ONLY of pipe-type marks and spaces.
+// Covers "|", "!", and any multi-pipe variant the charts use: "||", "| |", "|||", "| | |".
+// A lone "I" / "l" / "1" is almost always a mistyped pipe, so those count too.
+const CONNECTOR_RE = /^[|!Il1]+$/
+const isConn = v => { const t = String(v).replace(/\s+/g, ''); return t.length > 0 && CONNECTOR_RE.test(t) }
 const colName = i => XLSX.utils.encode_col(i)
 
 // Female if name ends in a known female marker, or is the literal "GIRL".
