@@ -26,7 +26,9 @@ export default function ChartConverter() {
     try {
       const base = file.name.replace(/\.[^.]+$/, '')
       setFileName(file.name)
-      const sc = subCaste || base
+      // Always adopt the just-uploaded file's name — never reuse the previous file's
+      // sub-caste, otherwise a new file would download with the OLD file's name (overwrite risk).
+      const sc = base
       setSubCaste(sc)
 
       const buf = await file.arrayBuffer()
