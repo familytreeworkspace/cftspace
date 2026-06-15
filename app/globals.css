@@ -210,3 +210,42 @@
 .react-flow__edge path {
   pointer-events: stroke;
 }
+
+/* ──────────────────────────────────────────────────────────────────
+   Global button affordance — EVERY button across the whole app feels
+   raised and alive: a subtle shadow at rest (always slightly lifted),
+   a clear lift + deeper shadow on hover with a pointer cursor, and a
+   "press down" on click so the user feels the button responding.
+
+   Movement uses the `transform` property on purpose: Tailwind v4 centers
+   elements with the separate `translate` property (translate-x/-y), so
+   centered/absolute buttons keep their position AND still lift.
+   Rules are unlayered so they apply consistently over Tailwind utilities,
+   while leaving each button's own colours/background untouched.
+   ────────────────────────────────────────────────────────────────── */
+button,
+[role="button"] {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease,
+              background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+button:not(:disabled):not([aria-disabled="true"]),
+[role="button"]:not([aria-disabled="true"]) {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+button:not(:disabled):not([aria-disabled="true"]):hover,
+[role="button"]:not([aria-disabled="true"]):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.16);
+}
+button:not(:disabled):not([aria-disabled="true"]):active,
+[role="button"]:not([aria-disabled="true"]):active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+button:disabled,
+button[aria-disabled="true"],
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+  box-shadow: none;
+}
