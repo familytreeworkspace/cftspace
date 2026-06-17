@@ -86,8 +86,25 @@ const maxRow = grid.length
 const maxCol = grid.reduce((m, r) => Math.max(m, r.length), 0)
 const cell = (r, c) => (grid[r] && grid[r][c] != null ? grid[r][c] : '')
 
-// Address = the title/origin text in the top-left corner (column A), e.g. "MAKWANA SENHAR".
-const ADDRESS = grid.map(r => (r[0] || '').trim()).filter(Boolean).join(' ')
+// The chart's title block (sub-caste + village, e.g. "MAKWANA SENHAR") sits in the
+// TOP CORNER above the genealogy. In most files it's in column A, but in some it's
+// shifted into column B/C — where the old "skip column A" rule let it leak in as a
+// fake name+annotation and get counted as a household. Detect the title by ROW instead:
+// the root ancestor sits one row above the FIRST vertical connector "|", so every row
+// strictly above that is the title block (in whatever column it happens to be written).
+let firstPipeRow = -1
+for (let r = 0; r < maxRow && firstPipeRow < 0; r++) {
+  for (let c = 0; c < maxCol; c++) {
+    if (PIPE_RE.test(String(cell(r, c)).replace(/\s+/g, ''))) { firstPipeRow = r; break }
+  }
+}
+const headerEndRow = firstPipeRow > 0 ? firstPipeRow - 1 : 0   // root ancestor row; title is above it
+
+// Address = all title text above the root ancestor (any column), e.g. "MAKWANA SENHAR".
+const ADDRESS = grid.slice(0, headerEndRow)
+  .flatMap(row => row.map(v => String(v || '').trim()))
+  .filter(v => v && !isConn(v))
+  .join(' ')
 
 // ── 2. Classify cells → names (with their annotation lines) ─────────────────
 // Per column, top→bottom. A name "owns" the consecutive text rows directly below
@@ -96,10 +113,11 @@ const names  = []                 // { id, row, col, name, alt, annotations:[] }
 const nameAt = new Map()          // "r,c" → name object
 const keyOf  = (r, c) => r + ',' + c
 
-for (let c = 1; c < maxCol; c++) {   // c=0 is the title column (MAKWANA / SENHAR) — skip
+for (let c = 1; c < maxCol; c++) {   // c=0 is the legacy title column — never holds tree names
   let current = null      // name currently collecting annotations
   let prevRow = -99       // last row consumed for `current`
   for (let r = 0; r < maxRow; r++) {
+    if (r < headerEndRow) continue   // title block (sub-caste + village) — not a person, in any column
     const v = cell(r, c)
     if (v === '')        { current = null; continue }
     if (isConn(v))       { current = null; continue }
