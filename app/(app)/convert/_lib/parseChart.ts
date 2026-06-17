@@ -103,19 +103,37 @@ export function parseChart(grid: string[][], subCaste: string): ConvertResult {
   const maxCol = grid.reduce((m, r) => Math.max(m, r.length), 0)
   const cell = (r: number, c: number) => (grid[r] && grid[r][c] != null ? grid[r][c] : '')
 
-  // Address = the title/origin text in the top-left corner (column A), e.g. "MAKWANA SENHAR".
+  // The chart's title block (sub-caste + village, e.g. "MAKWANA SENHAR") sits in the
+  // TOP CORNER above the genealogy. In most files it's in column A, but in some it's
+  // shifted into column B/C — where the old "skip column A" rule let it leak in as a
+  // fake name+annotation and get counted as a household (Ghar 1). Detect the title by
+  // ROW instead: the root ancestor sits one row above the FIRST vertical connector "|",
+  // so every row strictly above that is the title block (in whatever column it's written).
+  let firstPipeRow = -1
+  for (let r = 0; r < maxRow && firstPipeRow < 0; r++) {
+    for (let c = 0; c < maxCol; c++) {
+      if (PIPE_RE.test(cell(r, c).replace(/\s+/g, ''))) { firstPipeRow = r; break }
+    }
+  }
+  const headerEndRow = firstPipeRow > 0 ? firstPipeRow - 1 : 0   // root ancestor row; title is above it
+
+  // Address = all title text above the root ancestor (any column), e.g. "MAKWANA SENHAR".
   // Every household in this file gets this same address.
-  const address = grid.map(r => (r[0] || '').trim()).filter(Boolean).join(' ')
+  const address = grid.slice(0, headerEndRow)
+    .flatMap(row => row.map(v => (v || '').trim()))
+    .filter(v => v && !isConn(v))
+    .join(' ')
 
   // ── 1. Classify cells → names (with their annotation lines) ──────────────
   const names: Node[] = []
   const nameAt = new Map<string, Node>()
   const keyOf = (r: number, c: number) => r + ',' + c
 
-  for (let c = 1; c < maxCol; c++) {       // c=0 is the title column — skip
+  for (let c = 1; c < maxCol; c++) {       // c=0 is the legacy title column — never holds tree names
     let current: Node | null = null
     let prevRow = -99
     for (let r = 0; r < maxRow; r++) {
+      if (r < headerEndRow) continue       // title block (sub-caste + village) — not a person, in any column
       const v = cell(r, c)
       if (v === '') { current = null; continue }
       if (isConn(v)) { current = null; continue }
