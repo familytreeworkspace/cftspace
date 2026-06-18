@@ -242,6 +242,8 @@ for (const head of households) {
   householdRows.push({
     ghar_number: head.gharNumber,
     head_name:   head.name,
+    // The head's father = his parent node in the tree (blank for the root).
+    head_father_name: head.parent ? head.parent.name : '',
     head_gender: isFemale(head.name) ? 'Female' : 'Male',
     sub_caste:   SUB_CASTE,
     address:     ADDRESS,
@@ -350,7 +352,7 @@ function writeSheet(rows, headers, file, sheetName) {
 
 writeSheet(
   householdRows,
-  ['ghar_number', 'head_name', 'head_gender', 'sub_caste', 'address', 'review'],
+  ['ghar_number', 'head_name', 'head_father_name', 'head_gender', 'sub_caste', 'address', 'review'],
   'household.xlsx', 'household',
 )
 writeSheet(

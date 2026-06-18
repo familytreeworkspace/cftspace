@@ -9,6 +9,7 @@
 export interface HouseholdRow {
   ghar_number: number
   head_name: string
+  head_father_name: string
   head_gender: 'Male' | 'Female'
   sub_caste: string
   address: string
@@ -229,6 +230,8 @@ export function parseChart(grid: string[][], subCaste: string): ConvertResult {
     householdRows.push({
       ghar_number: head.gharNumber!,
       head_name: head.name,
+      // The head's father is simply his parent node in the tree (blank for the root).
+      head_father_name: head.parent ? head.parent.name : '',
       head_gender: isFemale(head.name) ? 'Female' : 'Male',
       sub_caste: subCaste,
       address,

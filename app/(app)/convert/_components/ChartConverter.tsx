@@ -7,7 +7,7 @@ import { parseChart, type ConvertResult } from '../_lib/parseChart'
 
 const MEMBER_HEADERS = ['ghar_number', 'member_number', 'name', 'gender', 'relation',
   'father_name', 'father_subcaste', 'father_address', 'raw_annotation', 'review'] as const
-const HOUSEHOLD_HEADERS = ['ghar_number', 'head_name', 'head_gender', 'sub_caste', 'address', 'review'] as const
+const HOUSEHOLD_HEADERS = ['ghar_number', 'head_name', 'head_father_name', 'head_gender', 'sub_caste', 'address', 'review'] as const
 const BETI_HEADERS = ['beti_name', 'beti_father_ghar', 'name', 'gender', 'relation', 'parent_name',
   'assoc_father_name', 'assoc_father_subcaste', 'assoc_father_address', 'raw_annotation'] as const
 
@@ -154,6 +154,7 @@ export default function ChartConverter() {
                   <div className="bg-muted/60 px-3 py-1.5 text-sm font-medium flex items-center gap-2">
                     <span className="text-primary">Ghar {h.ghar_number}</span>
                     <span>{h.head_name}</span>
+                    {h.head_father_name && <span className="text-[10px] text-muted-foreground">s/o {h.head_father_name}</span>}
                     <span className="text-xs text-muted-foreground">({h.head_gender})</span>
                     {h.address && <span className="text-[10px] text-muted-foreground">· {h.address}</span>}
                     {h.review && <span className="ml-auto text-[10px] text-amber-600">⚠ {h.review}</span>}
