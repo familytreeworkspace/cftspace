@@ -38,6 +38,10 @@ export const RELATED_FIELDS: FieldDef[] = [
   { key: 'education',     label: 'Education',      sindhi: 'تعليم',           required: false },
   { key: 'profession',    label: 'Profession',     sindhi: 'ڪاروبار',         required: false },
   { key: 'sub_caste',     label: 'Sub Caste',      sindhi: 'نُڪ',            required: false },
+  // Wife (Zal) only: her maika/father-side info. Stored as external text; an Admin can
+  // later replace it with a real maika household link from the tree UI. Ignored on non-wife rows.
+  { key: 'maiden_father_name', label: "Wife's Father Name (Sindhi)", sindhi: 'زال جو پيءُ', required: false },
+  { key: 'maiden_sub_caste',   label: "Wife's Father Sub Caste",     sindhi: 'زال جي نُڪ',  required: false },
 ]
 
 export const SASHAN_FIELDS: FieldDef[] = [
@@ -88,6 +92,9 @@ const HEADER_ALIASES: Record<string, string> = {
   'پاتي جو نالو': 'name_sindhi', 'member name': 'name_sindhi', 'name_sindhi': 'name_sindhi',
   'رشتو': 'relation_code', 'relation': 'relation_code', 'relation_code': 'relation_code',
   'نُڪ': 'sub_caste', 'sub caste': 'sub_caste', 'sub_caste': 'sub_caste',
+  // Related — Wife's maiden / father-side (text fallback for an off-platform maika)
+  'maiden_father_name': 'maiden_father_name', "wife's father": 'maiden_father_name', 'wife father name': 'maiden_father_name', 'wife father': 'maiden_father_name', 'maiden father name': 'maiden_father_name', 'زال جو پيءُ': 'maiden_father_name', 'سهرو': 'maiden_father_name',
+  'maiden_sub_caste': 'maiden_sub_caste', 'wife father sub caste': 'maiden_sub_caste', "wife's father sub caste": 'maiden_sub_caste', 'maiden sub caste': 'maiden_sub_caste', 'زال جي نُڪ': 'maiden_sub_caste',
   // Sashan
   'خود': 'khud_sc', 'khud': 'khud_sc',
   'زال': 'zal_sc', 'zal': 'zal_sc', 'wife': 'zal_sc',

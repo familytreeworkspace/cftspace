@@ -33,6 +33,9 @@ export interface MemberRow {
   education?: string
   profession?: string
   sub_caste?: string
+  // Wife (Zal) rows only — her father-side info, stored as external maiden text
+  maiden_father_name?: string
+  maiden_sub_caste?: string
 }
 
 export interface SashanRow {
@@ -65,6 +68,10 @@ function parseGender(val?: string): 'Male' | 'Female' {
   if (v === 'female' || v === 'f' || v === 'زال' || v === 'عورت') return 'Female'
   return 'Male'
 }
+
+// Wife relation codes — kept in sync with marriage.ts / tree-utils.ts
+const WIFE_CODES = ['زال', 'zal', 'wife', 'spouse', 'w']
+const isWifeCode = (c: string) => WIFE_CODES.includes(c) || WIFE_CODES.includes(c.toLowerCase())
 
 function parseYear(val?: string | number | null): number | null {
   if (!val) return null
@@ -172,18 +179,32 @@ export async function importMembers(
       continue
     }
 
-    const { error } = await supabase.from('members').insert({
+    const relationCode = String(row.relation_code).trim()
+    const maidenFather = row.maiden_father_name?.trim()
+
+    const memberData: Record<string, unknown> = {
       household_id:  householdId,
       member_number: row.member_number ? Number(row.member_number) : null,
       // Source is Sindhi → store in name_sindhi; name (English) + name_hindi filled by Directory backfill
       name_sindhi:   String(row.name_sindhi).trim(),
       gender:        parseGender(row.gender),
-      relation_code: String(row.relation_code).trim(),
+      relation_code: relationCode,
       dob_year:      parseYear(row.dob_year),
       education:     row.education?.trim() || null,
       profession:    row.profession?.trim() || null,
       sub_caste_id:  subCasteId,
-    } as any)
+    }
+
+    // Wife's father-side info → store as external maiden text (only on wife rows that
+    // actually carry a father name). Admin can later link a real maika household from the
+    // tree UI, which clears these fields. Non-wife rows derive their father from the head.
+    if (isWifeCode(relationCode) && maidenFather) {
+      memberData.maiden_external    = true
+      memberData.maiden_father_name = maidenFather
+      memberData.maiden_sub_caste   = row.maiden_sub_caste?.trim() || null
+    }
+
+    const { error } = await supabase.from('members').insert(memberData as any)
 
     if (error) {
       result.errors.push(`Member "${row.name_sindhi}" (Ghar ${row.ghar_number}): ${error.message}`)

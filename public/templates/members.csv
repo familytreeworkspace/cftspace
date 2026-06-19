@@ -1,4 +1,4 @@
-sub_caste,profession,education,dob_year,relation_code,gender,name_sindhi,member_number,ghar_number
-Makwana,Housewife,-,1977,ZAL,Female,Dilno,1,1
-Acho,Student,Matric,1997,BT,Male,Dilno Parkash,2,1
-Acho,Student,Matric,1999,BT,Male,Durga Dilno,3,1
+ghar_number,member_number,name_sindhi,gender,relation_code,dob_year,education,profession,sub_caste,maiden_father_name,maiden_sub_caste
+1,1,Dilno,Female,ZAL,1977,-,Housewife,Makwana,Soomar,Asdey
+1,2,Dilno Parkash,Male,BT,1997,Matric,Student,Acho,,
+1,3,Durga Dilno,Male,BT,1999,Matric,Student,Acho,,
