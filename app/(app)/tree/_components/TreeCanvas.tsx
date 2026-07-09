@@ -15,7 +15,7 @@ import { LinkConfirmModal } from './LinkConfirmModal'
 import { AddAncestorModal } from './AddAncestorModal'
 import MarriageModal, { type MarriageLinkTarget } from './MarriageModal'
 import MarriageInfoPopup, { type MarriageInfoTarget } from './MarriageInfoPopup'
-import { createHouseholdLink, linkMembers, removeHouseholdLink, setDeathYear, saveNodePosition, resetTreeLayout } from '@/app/actions/tree'
+import { createHouseholdLink, linkMembers, removeHouseholdLink, setDeathYear, saveNodePosition, resetTreeLayout, autoLinkHouseholds, updateCardBasics, deleteCard } from '@/app/actions/tree'
 import type { HouseholdTree, CrossHouseholdLink } from './types'
 import type { AncestorTrigger } from './MemberFlowNode'
 
@@ -208,6 +208,19 @@ function computeWidths(node: LNode): number {
   return node.subtreeW
 }
 
+// ── Subtree height (for grid wrapping of root families) ───────
+// Vertical extent of a family from its head row down to the deepest descendant,
+// plus any in-household ancestor cards stacked above the head.
+function computeHeight(node: LNode): number {
+  const ancH = node.ancestors.length * (NODE_SLOT + GEN_GAP)
+  let childRowH = node.leafMembers.length > 0 ? NODE_SLOT : 0
+  node.children.forEach(ch => { childRowH = Math.max(childRowH, computeHeight(ch)) })
+  const belowH = (node.leafMembers.length > 0 || node.children.length > 0)
+    ? GEN_GAP + childRowH
+    : 0
+  return ancH + NODE_SLOT + belowH
+}
+
 // ── Step 3: assign positions (top-down) ──────────────────────
 function assignPositions(node: LNode, startX: number, y: number) {
   node.cx     = startX + node.subtreeW / 2
@@ -251,6 +264,8 @@ function buildFlowElements(
   subCasteId: string,
   onMarriageLink: (memberId: string, householdId: string, mode: 'maika' | 'sasural', subCasteId: string) => void,
   onMarriageInfo: (memberId: string, mode: 'maika' | 'sasural') => void,
+  onEditCard: (id: string, target: 'household' | 'member', patch: { name: string; gender: 'Male' | 'Female'; dobYear: number | null }) => void,
+  onDeleteCard: (id: string, target: 'household' | 'member') => void,
 ): { nodes: Node[]; edges: Edge[]; coupleJunctions: { jxnId: string; headId: string; wifeId: string }[] } {
 
   const q = searchTerm.trim().toLowerCase()
@@ -299,6 +314,8 @@ function buildFlowElements(
         onMarkDeath,
         onMarriageLink,
         onMarriageInfo,
+        onEditCard,
+        onDeleteCard,
       } as FamilyNodeData,
     })
   }
@@ -422,6 +439,8 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, 
   const [marriageLink, setMarriageLink] = useState<MarriageLinkTarget | null>(null)
   const [marriageInfo, setMarriageInfo] = useState<MarriageInfoTarget | null>(null)
   const [actionError, setActionError]   = useState('')
+  const [autoLinking, setAutoLinking]   = useState(false)
+  const [autoLinkMsg, setAutoLinkMsg]   = useState('')
 
   const nhMap    = useRef<Map<string, string>>(new Map())
   const nnMap    = useRef<Map<string, string>>(new Map())
@@ -474,6 +493,49 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, 
     setMarriageInfo({ memberId, memberName: nnMap.current.get(memberId) ?? 'Member', mode })
   }, [])
 
+  const handleEditCard = useCallback(async (
+    id: string, target: 'household' | 'member',
+    patch: { name: string; gender: 'Male' | 'Female'; dobYear: number | null },
+  ) => {
+    setActionError('')
+    const r = await updateCardBasics({ id, target, ...patch })
+    if (r.error) { setActionError(r.error); return }
+    onTreeUpdated()
+  }, [onTreeUpdated])
+
+  const handleDeleteCard = useCallback(async (id: string, target: 'household' | 'member') => {
+    setActionError('')
+    const r = await deleteCard({ id, target })
+    if (r.error) { setActionError(r.error); return }
+    onTreeUpdated()
+  }, [onTreeUpdated])
+
+  const handleAutoLink = useCallback(async () => {
+    setActionError('')
+    setAutoLinkMsg('')
+    setAutoLinking(true)
+    try {
+      const r = await autoLinkHouseholds(subCasteId)
+      if (r.error) { setActionError(r.error); return }
+      const connected = r.linkedToReal + r.groupedUnderVirtual
+      if (connected === 0) {
+        setAutoLinkMsg(
+          r.alreadyLinked > 0
+            ? 'All families with a matching father are already linked.'
+            : 'No father-name matches found to link automatically.'
+        )
+      } else {
+        const bits = [`${connected} families connected`]
+        if (r.ancestorsCreated > 0) bits.push(`${r.ancestorsCreated} ancestors added`)
+        if (r.ambiguous > 0)        bits.push(`${r.ambiguous} need manual review (duplicate names)`)
+        setAutoLinkMsg(bits.join(' · '))
+      }
+      onTreeUpdated()
+    } finally {
+      setAutoLinking(false)
+    }
+  }, [subCasteId, onTreeUpdated])
+
   const handleResetLayout = useCallback(async () => {
     setActionError('')
     savedPos.current = new Map()
@@ -488,10 +550,31 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, 
     const roots = buildTree(allTrees, crossLinks)
     roots.forEach(r => computeWidths(r))
 
-    let startX = 0
-    roots.forEach(r => {
-      assignPositions(r, startX, 0)
-      startX += r.subtreeW + SIBLING_GAP
+    // ── Grid-wrap the root families instead of one endless horizontal line ──
+    // Professional, screen-friendly layout: place families left→right, then wrap
+    // to a new row once a row gets too wide — so the tree grows DOWNWARD, not
+    // just sideways, and fits the viewport at a readable zoom.
+    const ROW_GAP = GEN_GAP * 1.4
+    const rootW = roots.map(r => r.subtreeW)
+    const rootH = roots.map(r => computeHeight(r))
+    const widest = rootW.length ? Math.max(...rootW) : 0
+    const totalW = rootW.reduce((s, w) => s + w + SIBLING_GAP, 0)
+    // Aim for a roughly square overall canvas (slightly wider than tall reads best).
+    const targetRowW = Math.max(widest, Math.sqrt(totalW * (rootH.length ? Math.max(...rootH) : 0)) * 1.4)
+
+    let cursorX = 0
+    let rowTopY = 0
+    let rowMaxH = 0
+    roots.forEach((r, i) => {
+      // Wrap to the next row when this family would overflow the target width
+      if (cursorX > 0 && cursorX + rootW[i] > targetRowW) {
+        rowTopY += rowMaxH + ROW_GAP
+        cursorX = 0
+        rowMaxH = 0
+      }
+      assignPositions(r, cursorX, rowTopY)
+      cursorX += rootW[i] + SIBLING_GAP
+      rowMaxH = Math.max(rowMaxH, rootH[i])
     })
 
     const linkedChildHhIds = new Set(crossLinks.map(cl => cl.child_household_id))
@@ -503,7 +586,7 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, 
     })
     const { nodes: newNodes, edges: newEdges, coupleJunctions } = buildFlowElements(
       roots, graphicMode, canEdit, linkMode, handleAddRelative, linkedChildHhIds, handleUnlink, ancestorRelation, handleMarkDeath, searchTerm,
-      subCasteId, handleMarriageLink, handleMarriageInfo,
+      subCasteId, handleMarriageLink, handleMarriageInfo, handleEditCard, handleDeleteCard,
     )
 
     // Restore positions — in-session drags first, then positions saved in the DB
@@ -546,7 +629,7 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, 
       lastSigRef.current = sig
       setTimeout(() => rfInstance.current?.fitView({ padding: 0.2, maxZoom: 1.2, duration: 400 }), 60)
     }
-  }, [allTrees, crossLinks, positions, searchTerm, graphicMode, canEdit, linkMode, subCasteId, handleAddRelative, handleUnlink, handleMarkDeath, handleMarriageLink, handleMarriageInfo, setNodes, setEdges])
+  }, [allTrees, crossLinks, positions, searchTerm, graphicMode, canEdit, linkMode, subCasteId, handleAddRelative, handleUnlink, handleMarkDeath, handleMarriageLink, handleMarriageInfo, handleEditCard, handleDeleteCard, setNodes, setEdges])
 
   // New sub caste → drop any in-session drag overrides so DB positions take effect
   useEffect(() => { savedPos.current = new Map() }, [subCasteId])
@@ -713,6 +796,17 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, 
 
                 <div className="w-px h-5 bg-gray-200" />
                 <button
+                  onClick={handleAutoLink}
+                  disabled={autoLinking}
+                  className="flex items-center gap-1 text-emerald-600 hover:text-emerald-700 font-semibold text-xs transition-colors disabled:opacity-50"
+                  title="Connect families automatically by matching each household's father name to its parent household"
+                >
+                  {autoLinking && <span className="w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />}
+                  {autoLinking ? 'Linking…' : 'Auto-Link Families'}
+                </button>
+
+                <div className="w-px h-5 bg-gray-200" />
+                <button
                   onClick={handleResetLayout}
                   className="text-gray-500 hover:text-red-600 font-medium text-xs transition-colors"
                   title="Clear saved positions and return to automatic layout"
@@ -732,6 +826,13 @@ export default function TreeCanvas({ allTrees, canEdit, crossLinks, subCasteId, 
         <div className="absolute top-16 left-1/2 -translate-x-1/2 bg-red-50 border border-red-200 text-red-700 text-xs px-4 py-2 rounded-xl shadow-lg z-50 flex items-center gap-2">
           <span>{actionError}</span>
           <button onClick={() => setActionError('')} className="ml-2 font-bold">×</button>
+        </div>
+      )}
+
+      {autoLinkMsg && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs px-4 py-2 rounded-xl shadow-lg z-50 flex items-center gap-2">
+          <span>✓ {autoLinkMsg}</span>
+          <button onClick={() => setAutoLinkMsg('')} className="ml-2 font-bold">×</button>
         </div>
       )}
 

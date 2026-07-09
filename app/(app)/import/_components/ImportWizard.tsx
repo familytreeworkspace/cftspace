@@ -9,6 +9,7 @@ import {
   type ImportType,
 } from '@/lib/import-column-maps'
 import { runImport, type ImportResult } from '@/app/actions/import'
+import { autoLinkHouseholds } from '@/app/actions/tree'
 
 // ---- Types ----
 interface SubCaste { id: string; name: string }
@@ -223,6 +224,12 @@ export default function ImportWizard({
 
     const mode = state.isReimport ? 'reimport' : 'fresh'
     const result = await runImport(state.importType, mappedRows, state.subCasteId, mode)
+
+    // Households carry the father names — once they're in, connect families automatically
+    // by matching each household's father name to its parent household.
+    if (state.importType === 'household' && result.success > 0) {
+      try { await autoLinkHouseholds(state.subCasteId) } catch {}
+    }
 
     setState(s => ({
       ...s,

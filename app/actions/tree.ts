@@ -521,6 +521,224 @@ export async function createHouseholdLink(input: {
   return {}
 }
 
+// ── Auto-link families by father name ──────────────────────────────────────
+// Connects the 88 separate household trees into proper lineages: matches each
+// household's imported father name (head_father_name[_sindhi]) to the head of
+// another household in the same sub caste and creates the parent→child
+// household_link. When a father is shared by several households but is NOT a
+// household himself, a single virtual ancestor is created so those siblings
+// hang together under one father node. Idempotent — re-running only fills gaps.
+export interface AutoLinkResult {
+  linkedToReal: number       // households linked to an existing parent household
+  groupedUnderVirtual: number // households grouped under a new virtual father
+  ancestorsCreated: number   // virtual father households created
+  ambiguous: number          // father name matched >1 household — left for manual linking
+  alreadyLinked: number      // skipped because a parent link already existed
+  noFather: number           // skipped because no father name was recorded
+  error?: string
+}
+
+// Normalise a name for matching: trim, collapse inner whitespace, lower-case.
+function normName(s?: string | null): string {
+  return (s ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+}
+
+export async function autoLinkHouseholds(subCasteId: string): Promise<AutoLinkResult> {
+  const empty: AutoLinkResult = {
+    linkedToReal: 0, groupedUnderVirtual: 0, ancestorsCreated: 0,
+    ambiguous: 0, alreadyLinked: 0, noFather: 0,
+  }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ...empty, error: 'Not authenticated' }
+
+  const { data: profile } = await supabase
+    .from('users').select('role').eq('id', user.id).single()
+  if (!profile || !['chief', 'admin'].includes(profile.role)) {
+    return { ...empty, error: 'Only Admin or Chief can auto-link families.' }
+  }
+
+  // Load every active household in this sub caste (cast as any — *_sindhi / is_virtual
+  // columns are added by later migrations).
+  const { data: hhRaw, error: hhErr } = await (supabase as any)
+    .from('households')
+    .select('id, head_name, head_name_sindhi, head_father_name, head_father_name_sindhi, is_virtual')
+    .eq('sub_caste_id', subCasteId)
+    .eq('is_active', true)
+  if (hhErr) return { ...empty, error: hhErr.message }
+
+  const households = (hhRaw ?? []) as Array<{
+    id: string
+    head_name: string | null
+    head_name_sindhi: string | null
+    head_father_name: string | null
+    head_father_name_sindhi: string | null
+    is_virtual: boolean | null
+  }>
+  if (households.length === 0) return empty
+
+  // Index real (non-virtual) households by every spelling of their head name.
+  const headIndex = new Map<string, string[]>()  // normName → [householdId]
+  for (const h of households) {
+    if (h.is_virtual) continue
+    for (const n of [normName(h.head_name), normName(h.head_name_sindhi)]) {
+      if (!n) continue
+      const arr = headIndex.get(n) ?? []
+      if (!arr.includes(h.id)) arr.push(h.id)
+      headIndex.set(n, arr)
+    }
+  }
+
+  // Households that already have a parent (father/mother) link — never touch these.
+  const { data: existingLinks } = await (supabase as any)
+    .from('household_links')
+    .select('child_household_id, relation')
+  const linkedChildren = new Set<string>(
+    (existingLinks ?? [])
+      .filter((l: any) => l.relation !== 'spouse')
+      .map((l: any) => l.child_household_id)
+  )
+
+  const result: AutoLinkResult = { ...empty }
+  const toRealLinks: { child: string; parent: string }[] = []
+  const orphans = new Map<string, { name: string; children: string[] }>() // fatherKey → siblings
+
+  for (const h of households) {
+    if (h.is_virtual) continue
+    if (linkedChildren.has(h.id)) { result.alreadyLinked++; continue }
+
+    const fatherDisplay = (h.head_father_name_sindhi || h.head_father_name || '').trim()
+    const fatherKey = normName(fatherDisplay)
+    if (!fatherKey) { result.noFather++; continue }
+
+    const matches = (headIndex.get(fatherKey) ?? []).filter(id => id !== h.id)
+    if (matches.length === 1) {
+      toRealLinks.push({ child: h.id, parent: matches[0] })
+    } else if (matches.length > 1) {
+      result.ambiguous++   // can't tell which same-named head is the father — leave manual
+    } else {
+      const o = orphans.get(fatherKey) ?? { name: fatherDisplay, children: [] }
+      o.children.push(h.id)
+      orphans.set(fatherKey, o)
+    }
+  }
+
+  // Create the parent→child links to real households.
+  for (const { child, parent } of toRealLinks) {
+    const { error } = await (supabase as any)
+      .from('household_links')
+      .upsert(
+        { child_household_id: child, parent_household_id: parent, relation: 'father', link_type: 'biological', created_by: user.id },
+        { onConflict: 'child_household_id,parent_household_id,relation' },
+      )
+    if (!error) result.linkedToReal++
+  }
+
+  // For fathers shared by 2+ households but not households themselves, create one
+  // virtual ancestor each and hang the siblings under it.
+  let vi = 0
+  for (const { name, children } of orphans.values()) {
+    if (children.length < 2) continue   // a lone household with an unknown father isn't a connection
+    const { data: vh, error: vhErr } = await (supabase as any)
+      .from('households')
+      .insert({
+        sub_caste_id: subCasteId,
+        ghar_number:  `ANC-${Date.now()}-${vi++}`,
+        head_name_sindhi: name,
+        head_name:    name,
+        head_gender:  'Male',
+        is_virtual:   true,
+        is_active:    true,
+      })
+      .select('id')
+      .single()
+    if (vhErr || !vh) continue
+    result.ancestorsCreated++
+
+    for (const child of children) {
+      const { error } = await (supabase as any)
+        .from('household_links')
+        .upsert(
+          { child_household_id: child, parent_household_id: vh.id, relation: 'father', link_type: 'biological', created_by: user.id },
+          { onConflict: 'child_household_id,parent_household_id,relation' },
+        )
+      if (!error) result.groupedUnderVirtual++
+    }
+  }
+
+  revalidatePath('/tree')
+  return result
+}
+
+// ── Quick inline edit of a card's basics from the tree ──────────────────────
+export async function updateCardBasics(input: {
+  id: string
+  target: 'household' | 'member'
+  name: string
+  gender: 'Male' | 'Female'
+  dobYear: number | null
+}): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data: profile } = await supabase
+    .from('users').select('role').eq('id', user.id).single()
+  if (!profile || !['chief', 'admin'].includes(profile.role)) {
+    return { error: 'Only Admin or Chief can edit cards.' }
+  }
+
+  const name = input.name.trim()
+  if (!name) return { error: 'Name cannot be empty.' }
+
+  // Write the typed name to BOTH the English and Sindhi name columns so the card
+  // (which shows English first, then Sindhi) reflects the correction immediately.
+  const patch = input.target === 'household'
+    ? { head_name: name, head_name_sindhi: name, head_gender: input.gender, dob_year: input.dobYear }
+    : { name, name_sindhi: name, gender: input.gender, dob_year: input.dobYear }
+
+  const table = input.target === 'household' ? 'households' : 'members'
+  const { error } = await (supabase as any).from(table).update(patch).eq('id', input.id)
+  if (error) return { error: error.message }
+
+  revalidatePath('/tree')
+  return {}
+}
+
+// ── Delete a card from the tree ─────────────────────────────────────────────
+// member  → hard delete (and its family_links)
+// household → soft delete (is_active=false) and drop any cross-household links
+export async function deleteCard(input: {
+  id: string
+  target: 'household' | 'member'
+}): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data: profile } = await supabase
+    .from('users').select('role').eq('id', user.id).single()
+  if (!profile || !['chief', 'admin'].includes(profile.role)) {
+    return { error: 'Only Admin or Chief can delete cards.' }
+  }
+
+  if (input.target === 'member') {
+    await supabase.from('family_links').delete().eq('member_id', input.id)
+    const { error } = await supabase.from('members').delete().eq('id', input.id)
+    if (error) return { error: error.message }
+  } else {
+    // Drop cross-household links where this household is child or parent, then soft-delete it.
+    await (supabase as any).from('household_links').delete().eq('child_household_id', input.id)
+    await (supabase as any).from('household_links').delete().eq('parent_household_id', input.id)
+    const { error } = await supabase.from('households').update({ is_active: false }).eq('id', input.id)
+    if (error) return { error: error.message }
+  }
+
+  revalidatePath('/tree')
+  return {}
+}
+
 // Get full tree data for a single household
 export async function getHouseholdTreeData(householdId: string) {
   const supabase = await createClient()

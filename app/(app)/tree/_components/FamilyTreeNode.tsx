@@ -1,7 +1,17 @@
 'use client'
 
 import { memo, useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
+
+// Render modals on document.body so they escape React Flow's zoomed/transformed
+// canvas — otherwise `fixed` is relative to the scaled node and the dialog shrinks.
+function Portal({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+  if (!mounted || typeof document === 'undefined') return null
+  return createPortal(children, document.body)
+}
 
 export type FamilyNodeData = {
   id: string
@@ -29,6 +39,8 @@ export type FamilyNodeData = {
   onMarkDeath?: (id: string, isHead: boolean, year: number | null) => void
   onMarriageLink?: (memberId: string, householdId: string, mode: 'maika' | 'sasural', subCasteId: string) => void
   onMarriageInfo?: (memberId: string, mode: 'maika' | 'sasural') => void
+  onEditCard?: (id: string, target: 'household' | 'member', patch: { name: string; gender: 'Male' | 'Female'; dobYear: number | null }) => void
+  onDeleteCard?: (id: string, target: 'household' | 'member') => void
 }
 
 const MALE_BG   = '#eff6ff'   // blue-50
@@ -98,6 +110,9 @@ function AddMenu({
   const bottomOptions = ['Add Spouse', 'Add Child', 'Add Brother', 'Add Sister', 'Mark Deceased']
   const options = position === 'top' ? topOptions : bottomOptions
 
+  // Edit / Delete always available at the foot of the menu
+  const manageOptions = ['Edit', 'Delete']
+
   return (
     <div
       ref={ref}
@@ -116,6 +131,22 @@ function AddMenu({
           {opt}
         </button>
       ))}
+
+      <div className="my-1 border-t border-gray-100" />
+      {manageOptions.map(opt => (
+        <button
+          key={opt}
+          onClick={(e) => { e.stopPropagation(); onAdd(nodeId, position, opt) }}
+          className={[
+            'w-full text-left px-4 py-2 text-xs transition-colors flex items-center gap-2',
+            opt === 'Delete'
+              ? 'text-red-600 hover:bg-red-50'
+              : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700',
+          ].join(' ')}
+        >
+          <span>{opt === 'Delete' ? '🗑' : '✏️'}</span> {opt}
+        </button>
+      ))}
     </div>
   )
 }
@@ -125,6 +156,8 @@ export const FamilyTreeNode = memo(function FamilyTreeNode({ data, selected }: N
   const [topMenu, setTopMenu]       = useState(false)
   const [bottomMenu, setBottomMenu] = useState(false)
   const [deathModal, setDeathModal] = useState(false)
+  const [editModal, setEditModal]   = useState(false)
+  const [delConfirm, setDelConfirm] = useState(false)
 
   const isDeceased = !!(d.dobDeathYear)
   const bg  = isDeceased ? DEAD_BG  : d.gender === 'Female' ? FEM_BG  : MALE_BG
@@ -159,6 +192,8 @@ export const FamilyTreeNode = memo(function FamilyTreeNode({ data, selected }: N
     setTopMenu(false)
     setBottomMenu(false)
     if (type === 'Mark Deceased') { setDeathModal(true); return }
+    if (type === 'Edit')   { setEditModal(true); return }
+    if (type === 'Delete') { setDelConfirm(true); return }
     d.onAddRelative(nodeId, pos)
   }
 
@@ -256,11 +291,11 @@ export const FamilyTreeNode = memo(function FamilyTreeNode({ data, selected }: N
 
         {/* Name */}
         <div className="text-center w-full px-1">
-          <div className="text-[11px] font-semibold text-gray-800 leading-tight truncate">
+          <div className="text-[14px] font-semibold text-gray-800 leading-tight truncate">
             {d.name}
           </div>
           {/* Birth / Death year */}
-          <div className="text-[9px] text-gray-400 mt-0.5">
+          <div className="text-[10px] text-gray-400 mt-0.5">
             {d.dobYear ? (isDeceased ? `${d.dobYear} – ${d.dobDeathYear}` : `${d.dobYear} –`) : ''}
           </div>
           {/* Relation label */}
@@ -336,12 +371,40 @@ export const FamilyTreeNode = memo(function FamilyTreeNode({ data, selected }: N
       )}
 
       {deathModal && (
-        <DeathModal
-          name={d.name}
-          currentYear={d.dobDeathYear ?? null}
-          onSave={(year) => { d.onMarkDeath?.(d.id, d.isHead, year); setDeathModal(false) }}
-          onClose={() => setDeathModal(false)}
-        />
+        <Portal>
+          <DeathModal
+            name={d.name}
+            currentYear={d.dobDeathYear ?? null}
+            onSave={(year) => { d.onMarkDeath?.(d.id, d.isHead, year); setDeathModal(false) }}
+            onClose={() => setDeathModal(false)}
+          />
+        </Portal>
+      )}
+
+      {editModal && (
+        <Portal>
+          <EditCardModal
+            name={d.name}
+            gender={d.gender}
+            dobYear={d.dobYear}
+            onSave={(patch) => {
+              d.onEditCard?.(d.id, d.isHead ? 'household' : 'member', patch)
+              setEditModal(false)
+            }}
+            onClose={() => setEditModal(false)}
+          />
+        </Portal>
+      )}
+
+      {delConfirm && (
+        <Portal>
+          <DeleteConfirmModal
+            name={d.name}
+            isHead={d.isHead}
+            onConfirm={() => { d.onDeleteCard?.(d.id, d.isHead ? 'household' : 'member'); setDelConfirm(false) }}
+            onClose={() => setDelConfirm(false)}
+          />
+        </Portal>
       )}
 
     </div>
@@ -367,9 +430,9 @@ function DeathModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] nodrag"
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] nodrag p-4"
          onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl p-6 w-[340px] max-w-full mx-4"
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm"
            onClick={(e) => e.stopPropagation()}>
         <h3 className="font-semibold text-gray-800 text-base mb-1">Mark Deceased</h3>
         <p className="text-xs text-gray-500 mb-4">
@@ -403,6 +466,122 @@ function DeathModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+// ── Edit card modal — name / gender / birth year ──────────────
+function EditCardModal({
+  name, gender, dobYear, onSave, onClose,
+}: {
+  name: string
+  gender: 'Male' | 'Female'
+  dobYear: number | null
+  onSave: (patch: { name: string; gender: 'Male' | 'Female'; dobYear: number | null }) => void
+  onClose: () => void
+}) {
+  const [n, setN]   = useState(name)
+  const [g, setG]   = useState<'Male' | 'Female'>(gender)
+  const [y, setY]   = useState(dobYear ? String(dobYear) : '')
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!n.trim()) return
+    const yr = y.trim() ? parseInt(y) : null
+    if (y.trim() && (isNaN(yr!) || yr! < 1800 || yr! > new Date().getFullYear())) return
+    onSave({ name: n.trim(), gender: g, dobYear: yr })
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] nodrag p-4"
+         onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm"
+           onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-semibold text-gray-800 text-base mb-4">Edit Card</h3>
+        <form onSubmit={submit} className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-gray-500">Name</label>
+            <input
+              type="text"
+              value={n}
+              onChange={(e) => setN(e.target.value)}
+              className="w-full mt-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400"
+              autoFocus
+            />
+          </div>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="text-xs font-medium text-gray-500">Gender</label>
+              <select
+                value={g}
+                onChange={(e) => setG(e.target.value as 'Male' | 'Female')}
+                className="w-full mt-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+              >
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="text-xs font-medium text-gray-500">Birth Year</label>
+              <input
+                type="number"
+                value={y}
+                onChange={(e) => setY(e.target.value)}
+                className="w-full mt-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-400"
+                placeholder="e.g. 1980"
+                min={1800}
+                max={new Date().getFullYear()}
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors">
+              Cancel
+            </button>
+            <button type="submit"
+              className="flex-1 py-2.5 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium">
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ── Delete confirm modal ──────────────────────────────────────
+function DeleteConfirmModal({
+  name, isHead, onConfirm, onClose,
+}: {
+  name: string
+  isHead: boolean
+  onConfirm: () => void
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] nodrag p-4"
+         onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm"
+           onClick={(e) => e.stopPropagation()}>
+        <h3 className="font-semibold text-gray-800 text-base mb-1">Delete this card?</h3>
+        <p className="text-xs text-gray-500 mb-4">
+          <span className="font-medium text-gray-700">{name}</span> will be removed from the tree.
+          {isHead
+            ? ' This whole household (and its links) will be hidden.'
+            : ' This member will be permanently deleted.'}
+        </p>
+        <div className="flex gap-2">
+          <button type="button" onClick={onClose}
+            className="flex-1 py-2.5 text-sm border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors">
+            Cancel
+          </button>
+          <button type="button" onClick={onConfirm}
+            className="flex-1 py-2.5 text-sm bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-medium">
+            Delete
+          </button>
+        </div>
       </div>
     </div>
   )
